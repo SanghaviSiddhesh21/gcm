@@ -22,6 +22,8 @@ var (
 	ErrAlreadyInitialized = errors.New("gcm already initialized in this repository")
 	ErrInvalidName        = errors.New("invalid category name")
 	ErrCategoryExists     = errors.New("category already exists")
+	ErrCategoryNotFound   = errors.New("category not found")
+	ErrImmutableCategory  = errors.New("cannot modify immutable category 'Uncategorized'")
 )
 
 type Category struct {
@@ -129,5 +131,77 @@ func (s *Store) AddCategory(name string) error {
 	}
 
 	s.Categories = append(s.Categories, Category{Name: name, Immutable: false})
+	return nil
+}
+
+func (s *Store) GetCategory(name string) *Category {
+	for i := range s.Categories {
+		if s.Categories[i].Name == name {
+			return &s.Categories[i]
+		}
+	}
+	return nil
+}
+
+func (s *Store) GetAssignment(branch string) string {
+	if cat, exists := s.Assignments[branch]; exists {
+		return cat
+	}
+	return UncategorizedName
+}
+
+func (s *Store) AssignBranch(branch, category string) error {
+	if !s.CategoryExists(category) {
+		return ErrCategoryNotFound
+	}
+	s.Assignments[branch] = category
+	return nil
+}
+
+func (s *Store) BranchesInCategory(category string, allBranches []string) ([]string, error) {
+	if category != UncategorizedName && !s.CategoryExists(category) {
+		return nil, ErrCategoryNotFound
+	}
+
+	var result []string
+
+	if category == UncategorizedName {
+		for _, branch := range allBranches {
+			if _, exists := s.Assignments[branch]; !exists {
+				result = append(result, branch)
+			}
+		}
+	} else {
+		for _, branch := range allBranches {
+			if s.Assignments[branch] == category {
+				result = append(result, branch)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func (s *Store) RemoveCategory(name string) error {
+	if !s.CategoryExists(name) {
+		return ErrCategoryNotFound
+	}
+	if name == UncategorizedName {
+		return ErrImmutableCategory
+	}
+
+	for i, cat := range s.Categories {
+		if cat.Name == name {
+			s.Categories = append(s.Categories[:i], s.Categories[i+1:]...)
+			break
+		}
+	}
+
+	for branch, category := range s.Assignments {
+		if category == name {
+			delete(s.Assignments, branch)
+		}
+	}
+
 	return nil
 }
