@@ -1,0 +1,25 @@
+# Binaries
+gcm
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Build directories
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Go
+vendor/
+*.test
+
+# Misc
+.DS_Store
+.env
+*.log

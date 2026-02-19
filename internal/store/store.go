@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 )
 
 const (
@@ -18,6 +20,8 @@ const (
 var (
 	ErrNotInitialized     = errors.New("gcm not initialized: run 'gcm init' first")
 	ErrAlreadyInitialized = errors.New("gcm already initialized in this repository")
+	ErrInvalidName        = errors.New("invalid category name")
+	ErrCategoryExists     = errors.New("category already exists")
 )
 
 type Category struct {
@@ -84,4 +88,46 @@ func Load(gitDir string) (*Store, error) {
 		return nil, fmt.Errorf("failed to parse %s: %w", path, err)
 	}
 	return &s, nil
+}
+
+func ValidateCategoryName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return ErrInvalidName
+	}
+
+	if len(name) > CategoryNameMaxLength {
+		return ErrInvalidName
+	}
+
+	if name == UncategorizedName {
+		return ErrInvalidName
+	}
+
+	if !regexp.MustCompile(`^[a-zA-Z0-9-]+$`).MatchString(name) {
+		return ErrInvalidName
+	}
+
+	return nil
+}
+
+func (s *Store) CategoryExists(name string) bool {
+	for _, cat := range s.Categories {
+		if cat.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Store) AddCategory(name string) error {
+	if err := ValidateCategoryName(name); err != nil {
+		return err
+	}
+
+	if s.CategoryExists(name) {
+		return ErrCategoryExists
+	}
+
+	s.Categories = append(s.Categories, Category{Name: name, Immutable: false})
+	return nil
 }
