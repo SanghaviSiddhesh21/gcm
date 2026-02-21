@@ -16,16 +16,23 @@ var (
 	colorError         = color.New(color.FgRed)
 )
 
+// cprint, cprintf, cprintln are thin wrappers that discard the error returned
+// by fatih/color's print methods. Writing to a terminal never meaningfully fails
+// in a CLI context, so checking these errors everywhere would be pure noise.
+func cprint(c *color.Color, msg string)                  { _, _ = c.Print(msg) }
+func cprintf(c *color.Color, f string, a ...any)         { _, _ = c.Printf(f, a...) }
+func cprintln(c *color.Color, msg string)                { _, _ = c.Println(msg) }
+
 func PrintSuccess(msg string) {
-	colorSuccess.Println(msg)
+	cprintln(colorSuccess, msg)
 }
 
 func PrintWarning(msg string) {
-	colorWarning.Println(msg)
+	cprintln(colorWarning, msg)
 }
 
 func PrintError(msg string) {
-	colorError.Println(msg)
+	cprintln(colorError, msg)
 }
 
 func PrintTree(categories []string, branches map[string][]string, currentBranch string) {
@@ -41,11 +48,11 @@ func PrintTree(categories []string, branches map[string][]string, currentBranch 
 			countText = "branches"
 		}
 
-		colorMeta.Print("- ")
+		cprint(colorMeta, "- ")
 		if count == 0 {
-			colorCategory.Printf("%s (empty)\n", category)
+			cprintf(colorCategory, "%s (empty)\n", category)
 		} else {
-			colorCategory.Printf("%s (%d %s)\n", category, count, countText)
+			cprintf(colorCategory, "%s (%d %s)\n", category, count, countText)
 		}
 
 		for i, branch := range catBranches {
@@ -62,10 +69,10 @@ func PrintTree(categories []string, branches map[string][]string, currentBranch 
 
 			if branch == currentBranch {
 				fmt.Printf("%s", prefix)
-				colorCurrentBranch.Printf("%s%s\n", marker, branch)
+				cprintf(colorCurrentBranch, "%s%s\n", marker, branch)
 			} else {
 				fmt.Printf("%s", prefix)
-				colorBranch.Printf("%s%s\n", marker, branch)
+				cprintf(colorBranch, "%s%s\n", marker, branch)
 			}
 		}
 	}
@@ -73,6 +80,6 @@ func PrintTree(categories []string, branches map[string][]string, currentBranch 
 
 func PrintCategoryList(categories []string) {
 	for _, category := range categories {
-		colorCategory.Println(category)
+		cprintln(colorCategory, category)
 	}
 }

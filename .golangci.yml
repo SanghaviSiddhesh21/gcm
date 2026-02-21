@@ -33,6 +33,3 @@ issues:
       linters:
         - gosec
         - errcheck
-    - path: internal/ui/
-      linters:
-        - errcheck  # color library print methods return ignorable errors in CLI output
