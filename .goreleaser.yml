@@ -24,11 +24,11 @@ builds:
 
 archives:
   - format: tar.gz
-    goos:
+    os:
       - linux
       - darwin
     format_overrides:
-      - goos: windows
+      - os: windows
         format: zip
 
 brews:
