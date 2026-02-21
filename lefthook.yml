@@ -1,9 +1,12 @@
 pre-push:
-  parallel: false  # fmt must complete before lint runs
+  parallel: false  # fmt → build → lint must run in order
   commands:
     fmt:
       glob: "**/*.go"
       run: gofmt -w .
+    build:
+      glob: "**/*.go"
+      run: go build ./...
     lint:
       glob: "**/*.go"
       run: golangci-lint run ./...
