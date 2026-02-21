@@ -30,11 +30,11 @@ archives:
 
 brews:
   - tap:
-      owner: siddhesh
+      owner: SanghaviSiddhesh21
       name: homebrew-tap
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
-    homepage: https://github.com/siddhesh/gcm
+    homepage: https://github.com/SanghaviSiddhesh21/gcm
     description: "Git Category Manager — organize branches without renaming them"
     license: MIT
