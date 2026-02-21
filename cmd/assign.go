@@ -12,7 +12,15 @@ import (
 var assignCmd = &cobra.Command{
 	Use:   "assign <branch> <category>",
 	Short: "Assign a branch to a category",
-	Args:  cobra.ExactArgs(2),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("missing arguments: branch and category are required\n\nUsage: gcm assign <branch> <category>\nExample: gcm assign my-feature feature")
+		}
+		if len(args) == 1 {
+			return fmt.Errorf("missing argument: category is required\n\nUsage: gcm assign <branch> <category>\nExample: gcm assign %s feature", args[0])
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		branch := args[0]
 		categoryName := args[1]

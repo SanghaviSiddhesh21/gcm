@@ -1,139 +1,170 @@
-# GCM — Git Category Manager
+# gcm — Git Category Manager
 
-A lightweight tool for organizing git branches by category without renaming them. Categories are stored locally in `.git/gcm.json`, completely invisible to GitHub.
+> Organize your local git branches into categories without renaming them.
 
-## Overview
-
-Developers with many local git branches have no lightweight way to organize them without renaming branches (which pollutes GitHub). `gcm` solves this by storing branch-to-category metadata locally.
-
-## Features
-
-- **Local-only storage**: Categories stored in `.git/gcm.json` (never tracked by git)
-- **Non-destructive**: Branch names never change—GitHub always sees original names
-- **Immutable default**: `Uncategorized` category always exists and cannot be deleted
-- **Visual organization**: Tree view of all branches grouped by category
-- **Easy switching**: `gcm switch` to jump between branches with category context
+Developers accumulate dozens of local branches with no good way to organize them. Renaming branches pollutes GitHub. `gcm` solves this by storing branch-to-category metadata locally in `.git/gcm.json` — completely invisible to git and GitHub.
 
 ## Installation
 
-### From Homebrew
+### Homebrew (macOS / Linux)
+
 ```bash
-brew install siddhesh/tap/gcm
+brew tap SanghaviSiddhesh21/homebrew-tap
+brew install gcm
 ```
 
-### From GitHub Releases
-Download the binary for your OS from [releases](https://github.com/siddhesh/gcm/releases).
+### Download Binary
+
+Download the latest binary for your platform from [GitHub Releases](https://github.com/SanghaviSiddhesh21/gcm/releases).
+
+| Platform | File |
+|---|---|
+| macOS (Apple Silicon) | `gcm_*_darwin_arm64.tar.gz` |
+| macOS (Intel) | `gcm_*_darwin_amd64.tar.gz` |
+| Linux (x86_64) | `gcm_*_linux_amd64.tar.gz` |
+| Linux (ARM64) | `gcm_*_linux_arm64.tar.gz` |
+| Windows (x86_64) | `gcm_*_windows_amd64.zip` |
 
 ### Build from Source
+
+Requires Go 1.21+.
+
 ```bash
-git clone https://github.com/siddhesh/gcm.git
+git clone https://github.com/SanghaviSiddhesh21/gcm.git
 cd gcm
-go build -o gcm ./cmd/main.go
+go build -o gcm .
 ```
+
+---
 
 ## Quick Start
 
 ```bash
-# Initialize gcm in your repo
+# 1. Initialize gcm in your repository
 gcm init
 
-# Create a category
+# 2. Create categories
 gcm create feature
+gcm create hotfix
 gcm create archived
 
-# Assign a branch to a category
+# 3. Assign branches to categories
 gcm assign my-new-feature feature
+gcm assign critical-fix hotfix
 gcm assign old-experiment archived
 
-# View all branches organized by category
+# 4. View all branches organized by category
 gcm view
 
-# View one category
+# 5. View a specific category
 gcm view feature
-
-# Switch to a branch
-gcm switch my-new-feature
-
-# List all categories
-gcm categories
-
-# Delete a category (branches move to Uncategorized)
-gcm delete archived
 ```
+
+**Example output of `gcm view`:**
+
+```
+- feature (2 branches)
+  ├── my-new-feature
+  └── another-feature ●
+
+- hotfix (1 branch)
+  └── critical-fix
+
+- Uncategorized (1 branch)
+  └── main
+```
+
+The `●` marker indicates your currently checked out branch.
+
+---
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `gcm init` | Initialize gcm in repo + set up git user config |
-| `gcm create <category>` | Create a new custom category |
-| `gcm categories` | List all categories |
+| `gcm init` | Initialize gcm in the current repository |
+| `gcm create <category>` | Create a new category |
 | `gcm assign <branch> <category>` | Assign a branch to a category |
-| `gcm switch <branch>` | Switch to any branch (shows category context) |
-| `gcm view` | Visual tree of ALL categories + branches |
-| `gcm view <category>` | Show only branches in a specific category |
-| `gcm delete <category>` | Delete category—branches move to Uncategorized |
+| `gcm view [category]` | View all branches organized by category, or filter to one |
+| `gcm categories` | List all category names |
+| `gcm delete <category>` | Delete a category — branches move to Uncategorized |
 
-## Storage Format
+### `gcm init`
 
-GCM stores metadata in `.git/gcm.json`:
+Run once per repository. Creates `.git/gcm.json` with a default `Uncategorized` category.
+
+```bash
+gcm init
+```
+
+### `gcm create <category>`
+
+Category names must be alphanumeric and may contain `-` or `_`. Max 64 characters.
+
+```bash
+gcm create feature
+gcm create hotfix
+gcm create team-alice
+```
+
+### `gcm assign <branch> <category>`
+
+Assigns a branch to a category. If the branch was already in another category, it is reassigned.
+
+```bash
+gcm assign my-feature feature
+gcm assign old-branch archived
+```
+
+### `gcm view [category]`
+
+Shows a tree of all categories with their branches. Optionally filter to one category.
+
+```bash
+gcm view           # all categories
+gcm view feature   # only the feature category
+```
+
+### `gcm categories`
+
+Lists all category names.
+
+```bash
+gcm categories
+```
+
+### `gcm delete <category>`
+
+Deletes a category. Branches in that category are moved back to `Uncategorized`. The `Uncategorized` category itself cannot be deleted.
+
+```bash
+gcm delete archived
+```
+
+---
+
+## How It Works
+
+gcm stores all data in `.git/gcm.json`:
 
 ```json
 {
   "version": "1.0",
   "categories": [
     { "name": "Uncategorized", "immutable": true },
-    { "name": "feature", "immutable": false },
-    { "name": "archived", "immutable": false }
+    { "name": "feature", "immutable": false }
   ],
   "assignments": {
-    "my-branch-name": "feature",
-    "old-branch": "archived"
+    "my-feature-branch": "feature"
   }
 }
 ```
 
-## Project Structure
+- Branches **not** in `assignments` are implicitly `Uncategorized`
+- The file lives inside `.git/` so git never tracks it
+- GitHub and your teammates never see your categories
 
-```
-gcm/
-├── main.go
-├── cmd/
-│   ├── root.go         # Root cobra command, version info
-│   ├── init.go         # gcm init
-│   ├── create.go       # gcm create
-│   ├── categories.go   # gcm categories
-│   ├── assign.go       # gcm assign
-│   ├── switch.go       # gcm switch
-│   ├── view.go         # gcm view / gcm view <category>
-│   └── delete.go       # gcm delete
-├── internal/
-│   ├── store/
-│   │   └── store.go    # Read/write .git/gcm.json
-│   ├── git/
-│   │   └── git.go      # List branches, current branch, switch branch, etc.
-│   └── ui/
-│       └── ui.go       # Tree rendering, colors, formatting
-├── go.mod
-├── go.sum
-└── README.md
-```
-
-## Dependencies
-
-- `github.com/spf13/cobra` — CLI framework
-- `github.com/fatih/color` — Terminal color output
-
-## Development
-
-### Checkpoints
-
-1. **Checkpoint 1**: Project setup (Go module, Cobra CLI, directory structure)
-2. **Checkpoint 2**: Storage layer (gcm.json read/write, gcm init)
-3. **Checkpoint 3**: Git integration (branch listing, switching)
-4. **Checkpoint 4**: Core commands (create, categories, assign, delete, switch)
-5. **Checkpoint 5**: Visual layer (gcm view with tree rendering)
-6. **Checkpoint 6**: Distribution (GitHub Actions, Homebrew)
+---
 
 ## License
 

@@ -12,7 +12,12 @@ import (
 var createCmd = &cobra.Command{
 	Use:   "create <category>",
 	Short: "Create a new category",
-	Args:  cobra.ExactArgs(1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("missing argument: category name\n\nUsage: gcm create <category>\nExample: gcm create feature")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		categoryName := args[0]
 
