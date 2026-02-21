@@ -1,0 +1,43 @@
+version: 2
+
+project_name: gcm
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: gcm
+    main: .
+    binary: gcm
+    flags:
+      - -trimpath
+    ldflags:
+      - -X github.com/siddhesh/gcm/cmd.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    goos:
+      - linux
+      - darwin
+    format_overrides:
+      - goos: windows
+        format: zip
+
+brews:
+  - tap:
+      owner: siddhesh
+      name: homebrew-tap
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    homepage: https://github.com/siddhesh/gcm
+    description: "Git Category Manager — organize branches without renaming them"
+    license: MIT
