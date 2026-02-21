@@ -64,11 +64,12 @@ var assignCmd = &cobra.Command{
 			return err
 		}
 
-		if oldCategory == categoryName {
+		switch oldCategory {
+		case categoryName:
 			fmt.Printf("Branch '%s' already in category '%s'\n", branch, categoryName)
-		} else if oldCategory == store.UncategorizedName {
+		case store.UncategorizedName:
 			fmt.Printf("Assigned '%s' to '%s'\n", branch, categoryName)
-		} else {
+		default:
 			fmt.Printf("Reassigned '%s' from '%s' to '%s'\n", branch, oldCategory, categoryName)
 		}
 		return nil
