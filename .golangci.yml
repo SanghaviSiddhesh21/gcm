@@ -11,7 +11,6 @@ linters:
     - unconvert    # unnecessary type conversions
     - prealloc     # slice pre-allocation suggestions
     - revive       # style checks
-    - gofmt        # enforces standard Go formatting
 
   settings:
     gosec:
@@ -21,6 +20,10 @@ linters:
       rules:
         - name: exported
           disabled: true  # don't require godoc on every exported symbol
+
+formatters:
+  enable:
+    - gofmt        # enforces standard Go formatting
 
 issues:
   max-same-issues: 0
