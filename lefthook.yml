@@ -1,0 +1,9 @@
+pre-push:
+  parallel: false  # fmt must complete before lint runs
+  commands:
+    fmt:
+      glob: "**/*.go"
+      run: gofmt -w .
+    lint:
+      glob: "**/*.go"
+      run: golangci-lint run ./...
