@@ -6,6 +6,7 @@ import (
 
 	"github.com/siddhesh/gcm/internal/git"
 	"github.com/siddhesh/gcm/internal/store"
+	"github.com/siddhesh/gcm/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -25,9 +26,12 @@ var categoriesCmd = &cobra.Command{
 			return err
 		}
 
+		var categoryNames []string
 		for _, cat := range s.Categories {
-			fmt.Println(cat.Name)
+			categoryNames = append(categoryNames, cat.Name)
 		}
+
+		ui.PrintCategoryList(categoryNames)
 		return nil
 	},
 }
