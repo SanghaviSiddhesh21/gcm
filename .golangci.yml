@@ -1,25 +1,26 @@
+version: "2"
+
 linters:
   enable:
-    - govet        # go vet checks (shadowed vars, printf mismatches, etc.)
+    - govet        # shadowed vars, printf mismatches
     - errcheck     # unhandled errors
-    - staticcheck  # comprehensive static analysis
-    - gosimple     # simplification suggestions
+    - staticcheck  # comprehensive static analysis (includes gosimple in v2)
     - ineffassign  # assignments whose value is never used
     - misspell     # spelling mistakes in comments/strings
-    - gosec        # security issues (e.g. unsafe exec, hardcoded credentials)
+    - gosec        # security issues
     - unconvert    # unnecessary type conversions
     - prealloc     # slice pre-allocation suggestions
-    - revive       # drop-in replacement for golint, style checks
-    - gofmt        # enforces standard Go formatting (gofmt -s)
+    - revive       # style checks
+    - gofmt        # enforces standard Go formatting
 
-linters-settings:
-  gosec:
-    excludes:
-      - G204  # subprocess launched with variable — expected in a git wrapper CLI
-  revive:
-    rules:
-      - name: exported
-        disabled: true  # don't require godoc on every exported symbol
+  settings:
+    gosec:
+      excludes:
+        - G204  # subprocess launched with variable — expected in a git wrapper CLI
+    revive:
+      rules:
+        - name: exported
+          disabled: true  # don't require godoc on every exported symbol
 
 issues:
   max-same-issues: 0
