@@ -1,0 +1,72 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/siddhesh/gcm/internal/git"
+	"github.com/siddhesh/gcm/internal/store"
+	"github.com/spf13/cobra"
+)
+
+var assignCmd = &cobra.Command{
+	Use:   "assign <branch> <category>",
+	Short: "Assign a branch to a category",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		branch := args[0]
+		categoryName := args[1]
+
+		repoInfo, err := git.GetRepoInfo()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			return err
+		}
+
+		s, err := store.Load(repoInfo.GitDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			return err
+		}
+
+		exists, err := git.BranchExists(repoInfo.GitDir, branch)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			return err
+		}
+		if !exists {
+			fmt.Fprintf(os.Stderr, "Error: branch '%s' not found\n", branch)
+			return fmt.Errorf("branch not found: %s", branch)
+		}
+
+		if !s.CategoryExists(categoryName) {
+			fmt.Fprintf(os.Stderr, "Error: category '%s' not found\n", categoryName)
+			return store.ErrCategoryNotFound
+		}
+
+		oldCategory := s.GetAssignment(branch)
+
+		if err := s.AssignBranch(branch, categoryName); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			return err
+		}
+
+		if err := store.Save(repoInfo.GitDir, s); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			return err
+		}
+
+		if oldCategory == categoryName {
+			fmt.Printf("Branch '%s' already in category '%s'\n", branch, categoryName)
+		} else if oldCategory == store.UncategorizedName {
+			fmt.Printf("Assigned '%s' to '%s'\n", branch, categoryName)
+		} else {
+			fmt.Printf("Reassigned '%s' from '%s' to '%s'\n", branch, oldCategory, categoryName)
+		}
+		return nil
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(assignCmd)
+}
