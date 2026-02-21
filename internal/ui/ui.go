@@ -19,9 +19,9 @@ var (
 // cprint, cprintf, cprintln are thin wrappers that discard the error returned
 // by fatih/color's print methods. Writing to a terminal never meaningfully fails
 // in a CLI context, so checking these errors everywhere would be pure noise.
-func cprint(c *color.Color, msg string)                  { _, _ = c.Print(msg) }
-func cprintf(c *color.Color, f string, a ...any)         { _, _ = c.Printf(f, a...) }
-func cprintln(c *color.Color, msg string)                { _, _ = c.Println(msg) }
+func cprint(c *color.Color, msg string)          { _, _ = c.Print(msg) }
+func cprintf(c *color.Color, f string, a ...any) { _, _ = c.Printf(f, a...) }
+func cprintln(c *color.Color, msg string)        { _, _ = c.Println(msg) }
 
 func PrintSuccess(msg string) {
 	cprintln(colorSuccess, msg)
