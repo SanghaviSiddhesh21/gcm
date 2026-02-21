@@ -22,14 +22,13 @@ linters:
         - name: exported
           disabled: true  # don't require godoc on every exported symbol
 
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+
 formatters:
   enable:
     - gofmt        # enforces standard Go formatting
-
-issues:
-  max-same-issues: 0
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gosec
-        - errcheck
