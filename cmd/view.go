@@ -25,7 +25,7 @@ Branch status labels:
 
 Color scheme:
   [Local] label                 Grey (not pushed)
-  [Remote] label                Cyan (pushed to remote)
+  [Remote] label                Magenta (pushed to remote)
   InSync status                 Green (in sync)
   ↑N status (ahead)             Blue (needs push)
   ↓N status (behind)            Yellow (needs pull)

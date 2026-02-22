@@ -15,7 +15,7 @@ var (
 	colorSuccess       = color.New(color.FgGreen)
 	colorWarning       = color.New(color.FgYellow)
 	colorError         = color.New(color.FgRed)
-	colorRemoteLabel   = color.New(color.FgCyan)
+	colorRemoteLabel   = color.New(color.FgMagenta)
 	colorInSync        = color.New(color.FgGreen)
 	colorAhead         = color.New(color.FgBlue)
 	colorBehind        = color.New(color.FgYellow)
