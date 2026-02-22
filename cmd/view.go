@@ -36,7 +36,7 @@ Note: status labels reflect your last fetch. To get up-to-date information, run:
   git fetch --prune
 
 Note: branches whose remote was deleted will show as [Local] after git fetch --prune.`,
-	Args:  cobra.MaximumNArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		repoInfo, err := git.GetRepoInfo()
 		if err != nil {
@@ -89,31 +89,31 @@ Note: branches whose remote was deleted will show as [Local] after git fetch --p
 			categoryNames = append(categoryNames, cat.Name)
 		}
 
-			remoteBranches, err := git.ListRemoteBranches(repoInfo.GitDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		return err
-	}
-	remoteSet := make(map[string]bool, len(remoteBranches))
-	for _, b := range remoteBranches {
-		remoteSet[b] = true
-	}
-
-	branchTags := make(map[string]string)
-	for _, branch := range allBranches {
-		if !remoteSet[branch] {
-			branchTags[branch] = "[Local]"
-			continue
-		}
-		ahead, behind, err := git.SyncStatus(repoInfo.GitDir, branch)
+		remoteBranches, err := git.ListRemoteBranches(repoInfo.GitDir)
 		if err != nil {
-			branchTags[branch] = "[Remote] ?"
-			continue
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			return err
 		}
-		branchTags[branch] = formatSyncTag(ahead, behind)
-	}
+		remoteSet := make(map[string]bool, len(remoteBranches))
+		for _, b := range remoteBranches {
+			remoteSet[b] = true
+		}
 
-	ui.PrintTree(categoryNames, branchMap, currentBranch, branchTags)
+		branchTags := make(map[string]string)
+		for _, branch := range allBranches {
+			if !remoteSet[branch] {
+				branchTags[branch] = "[Local]"
+				continue
+			}
+			ahead, behind, err := git.SyncStatus(repoInfo.GitDir, branch)
+			if err != nil {
+				branchTags[branch] = "[Remote] ?"
+				continue
+			}
+			branchTags[branch] = formatSyncTag(ahead, behind)
+		}
+
+		ui.PrintTree(categoryNames, branchMap, currentBranch, branchTags)
 		return nil
 	},
 }
