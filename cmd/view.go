@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
+	"time"
 
 	"github.com/siddhesh/gcm/internal/git"
 	"github.com/siddhesh/gcm/internal/store"
@@ -113,6 +115,12 @@ Note: branches whose remote was deleted will show as [Local] after git fetch --p
 			branchTags[branch] = formatSyncTag(ahead, behind)
 		}
 
+		branchTimes, err := git.BranchCommitTimes(repoInfo.GitDir)
+		if err != nil {
+			branchTimes = make(map[string]time.Time) // graceful degradation: preserve existing order
+		}
+		categoryNames, branchMap = sortView(categoryNames, branchMap, currentBranch, branchTimes)
+
 		ui.PrintTree(categoryNames, branchMap, currentBranch, branchTags)
 		return nil
 	},
@@ -129,6 +137,101 @@ func formatSyncTag(ahead, behind int) string {
 	default:
 		return fmt.Sprintf("[Remote] ↑%d ↓%d", ahead, behind)
 	}
+}
+
+// sortView reorders categoryNames and branches within each category per the 5 display rules.
+func sortView(
+	categoryNames []string,
+	branchMap map[string][]string,
+	currentBranch string,
+	branchTimes map[string]time.Time,
+) ([]string, map[string][]string) {
+	for cat, branches := range branchMap {
+		branchMap[cat] = sortedBranches(branches, currentBranch, branchTimes)
+	}
+	currentCat := findCurrentCategory(categoryNames, branchMap, currentBranch)
+	return sortedCategories(categoryNames, currentCat, branchMap, branchTimes), branchMap
+}
+
+// sortedBranches returns branches with currentBranch first (if present),
+// then remaining branches sorted newest commit first.
+func sortedBranches(branches []string, currentBranch string, branchTimes map[string]time.Time) []string {
+	if len(branches) <= 1 {
+		return branches
+	}
+	result := make([]string, 0, len(branches))
+	others := make([]string, 0, len(branches))
+	for _, b := range branches {
+		if b == currentBranch {
+			result = append(result, b)
+		} else {
+			others = append(others, b)
+		}
+	}
+	sort.Slice(others, func(i, j int) bool {
+		return branchTimes[others[i]].After(branchTimes[others[j]])
+	})
+	return append(result, others...)
+}
+
+// findCurrentCategory returns the category name containing currentBranch, or "" if not found.
+func findCurrentCategory(categoryNames []string, branchMap map[string][]string, currentBranch string) string {
+	for _, cat := range categoryNames {
+		for _, b := range branchMap[cat] {
+			if b == currentBranch {
+				return cat
+			}
+		}
+	}
+	return ""
+}
+
+// sortedCategories returns categoryNames reordered:
+//  1. Current branch's category first
+//  2. Other named categories sorted by most recent branch commit (newest first)
+//  3. Uncategorized last — unless it IS the current branch's category (Problem 1 wins)
+func sortedCategories(
+	categoryNames []string,
+	currentCat string,
+	branchMap map[string][]string,
+	branchTimes map[string]time.Time,
+) []string {
+	hasUncategorized := false
+	others := make([]string, 0, len(categoryNames))
+	for _, cat := range categoryNames {
+		if cat == currentCat {
+			continue
+		}
+		if cat == store.UncategorizedName {
+			hasUncategorized = true
+			continue
+		}
+		others = append(others, cat)
+	}
+	sort.Slice(others, func(i, j int) bool {
+		return maxCatTime(others[i], branchMap, branchTimes).After(
+			maxCatTime(others[j], branchMap, branchTimes))
+	})
+	result := make([]string, 0, len(categoryNames))
+	if currentCat != "" {
+		result = append(result, currentCat)
+	}
+	result = append(result, others...)
+	if hasUncategorized && currentCat != store.UncategorizedName {
+		result = append(result, store.UncategorizedName)
+	}
+	return result
+}
+
+// maxCatTime returns the most recent commit time among all branches in a category.
+func maxCatTime(cat string, branchMap map[string][]string, branchTimes map[string]time.Time) time.Time {
+	var t time.Time
+	for _, b := range branchMap[cat] {
+		if bt := branchTimes[b]; bt.After(t) {
+			t = bt
+		}
+	}
+	return t
 }
 
 func init() {

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type RepoInfo struct {
@@ -126,6 +127,59 @@ func SyncStatus(gitDir, branch string) (ahead, behind int, err error) {
 	}
 
 	return ahead, behind, nil
+}
+
+// BranchCommitTimes returns a map of local branch name → most recent commit time.
+// For each branch, considers both local (refs/heads/<b>) and remote (refs/remotes/origin/<b>),
+// returning whichever timestamp is more recent.
+// If a branch has no remote ref (local-only or [Remote] ?), only local time is used.
+// Uses a single git for-each-ref call for efficiency.
+func BranchCommitTimes(gitDir string) (map[string]time.Time, error) {
+	wd := workDir(gitDir)
+	output, err := runGit(wd, "for-each-ref",
+		"--format=%(refname) %(committerdate:unix)",
+		"refs/heads", "refs/remotes/origin")
+	if err != nil {
+		return nil, fmt.Errorf("for-each-ref failed: %w", err)
+	}
+
+	localTimes := make(map[string]time.Time)
+	remoteTimes := make(map[string]time.Time)
+
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, " ", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		ref, tsStr := parts[0], parts[1]
+		ts, err := strconv.ParseInt(tsStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		t := time.Unix(ts, 0)
+		if name, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+			localTimes[name] = t
+		} else if name, ok := strings.CutPrefix(ref, "refs/remotes/origin/"); ok {
+			if name != "HEAD" {
+				remoteTimes[name] = t
+			}
+		}
+	}
+
+	result := make(map[string]time.Time)
+	for name, lt := range localTimes {
+		rt := remoteTimes[name]
+		if rt.After(lt) {
+			result[name] = rt
+		} else {
+			result[name] = lt
+		}
+	}
+	return result, nil
 }
 
 func runGit(dir string, args ...string) (string, error) {

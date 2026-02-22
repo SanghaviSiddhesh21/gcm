@@ -416,3 +416,131 @@ func TestSyncStatus(t *testing.T) {
 		}
 	})
 }
+
+// ── TestBranchCommitTimes ─────────────────────────────────────────────────────
+
+func TestBranchCommitTimes(t *testing.T) {
+	t.Run("SUCCESS_CASE: local_only", func(t *testing.T) {
+		repoDir := setupTestRepo(t)
+		gitDir := filepath.Join(repoDir, ".git")
+
+		// Create a local branch but do not push it
+		createBranch(t, repoDir, "local-branch")
+
+		branchTimes, err := BranchCommitTimes(gitDir)
+		if err != nil {
+			t.Fatalf("BranchCommitTimes() error = %v", err)
+		}
+
+		mainTime := branchTimes["main"]
+		if mainTime.IsZero() {
+			t.Error("BranchCommitTimes() main time is zero")
+		}
+
+		localTime := branchTimes["local-branch"]
+		if localTime.IsZero() {
+			t.Error("BranchCommitTimes() local-branch time is zero")
+		}
+
+		// Both should have similar times since they're on the same commit
+		if mainTime != localTime {
+			t.Errorf("BranchCommitTimes() main and local-branch times differ: %v vs %v", mainTime, localTime)
+		}
+	})
+
+	t.Run("SUCCESS_CASE: remote_newer", func(t *testing.T) {
+		workDir, bareDir := setupTestRepoWithRemote(t)
+		gitDir := filepath.Join(workDir, ".git")
+
+		// Create a second clone and push a commit
+		workDir2 := t.TempDir()
+		run(t, workDir2, "git", "clone", bareDir, ".")
+		run(t, workDir2, "git", "config", "user.email", "test@gcm.test")
+		run(t, workDir2, "git", "config", "user.name", "GCM Test")
+
+		run(t, workDir2, "git", "commit", "--allow-empty", "-m", "remote commit")
+		run(t, workDir2, "git", "push", "origin", "main")
+
+		// Fetch in workDir so tracking ref updates
+		run(t, workDir, "git", "fetch", "origin")
+
+		branchTimes, err := BranchCommitTimes(gitDir)
+		if err != nil {
+			t.Fatalf("BranchCommitTimes() error = %v", err)
+		}
+
+		mainTime := branchTimes["main"]
+		if mainTime.IsZero() {
+			t.Error("BranchCommitTimes() main time is zero")
+		}
+	})
+
+	t.Run("SUCCESS_CASE: local_newer", func(t *testing.T) {
+		workDir, _ := setupTestRepoWithRemote(t)
+		gitDir := filepath.Join(workDir, ".git")
+
+		// Make a local commit after push
+		run(t, workDir, "git", "commit", "--allow-empty", "-m", "local only commit")
+
+		branchTimes, err := BranchCommitTimes(gitDir)
+		if err != nil {
+			t.Fatalf("BranchCommitTimes() error = %v", err)
+		}
+
+		mainTime := branchTimes["main"]
+		if mainTime.IsZero() {
+			t.Error("BranchCommitTimes() main time is zero")
+		}
+	})
+
+	t.Run("SUCCESS_CASE: in_sync", func(t *testing.T) {
+		workDir, _ := setupTestRepoWithRemote(t)
+		gitDir := filepath.Join(workDir, ".git")
+
+		branchTimes, err := BranchCommitTimes(gitDir)
+		if err != nil {
+			t.Fatalf("BranchCommitTimes() error = %v", err)
+		}
+
+		mainTime := branchTimes["main"]
+		if mainTime.IsZero() {
+			t.Error("BranchCommitTimes() main time is zero")
+		}
+	})
+
+	t.Run("SUCCESS_CASE: no_remote_configured", func(t *testing.T) {
+		repoDir := setupTestRepo(t)
+		gitDir := filepath.Join(repoDir, ".git")
+
+		branchTimes, err := BranchCommitTimes(gitDir)
+		if err != nil {
+			t.Fatalf("BranchCommitTimes() error = %v", err)
+		}
+
+		if branchTimes == nil {
+			t.Error("BranchCommitTimes() returned nil map")
+		}
+
+		mainTime := branchTimes["main"]
+		if mainTime.IsZero() {
+			t.Error("BranchCommitTimes() main time is zero")
+		}
+	})
+
+	t.Run("SUCCESS_CASE: strips_origin_prefix", func(t *testing.T) {
+		workDir, _ := setupTestRepoWithRemote(t)
+		gitDir := filepath.Join(workDir, ".git")
+
+		branchTimes, err := BranchCommitTimes(gitDir)
+		if err != nil {
+			t.Fatalf("BranchCommitTimes() error = %v", err)
+		}
+
+		// Verify no keys contain "origin/" prefix
+		for key := range branchTimes {
+			if len(key) >= len("origin/") && key[:len("origin/")] == "origin/" {
+				t.Errorf("BranchCommitTimes() result contains key with origin/ prefix: %q", key)
+			}
+		}
+	})
+}
