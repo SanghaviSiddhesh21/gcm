@@ -1,0 +1,34 @@
+version: "2"
+
+linters:
+  enable:
+    - govet        # shadowed vars, printf mismatches
+    - errcheck     # unhandled errors
+    - staticcheck  # comprehensive static analysis (includes gosimple in v2)
+    - ineffassign  # assignments whose value is never used
+    - misspell     # spelling mistakes in comments/strings
+    - gosec        # security issues
+    - unconvert    # unnecessary type conversions
+    - prealloc     # slice pre-allocation suggestions
+    - revive       # style checks
+
+  settings:
+    gosec:
+      excludes:
+        - G204  # subprocess launched with variable — expected in a git wrapper CLI
+        - G304  # file path from variable — path is always .git/gcm.json, not user input
+    revive:
+      rules:
+        - name: exported
+          disabled: true  # don't require godoc on every exported symbol
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt        # enforces standard Go formatting

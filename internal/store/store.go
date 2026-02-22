@@ -63,12 +63,12 @@ func Save(gitDir string, s *Store) error {
 		return err
 	}
 
-	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+	if err := os.WriteFile(tmpPath, data, 0o600); err != nil {
 		return err
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath) // best-effort cleanup, original rename error takes priority
 		return err
 	}
 
