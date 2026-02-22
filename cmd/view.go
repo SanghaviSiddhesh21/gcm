@@ -23,6 +23,15 @@ Branch status labels:
   [Remote] ↑A ↓B Pushed to remote, diverged — A commits ahead and B commits behind
   [Remote] ?     Pushed to remote, but sync status could not be determined
 
+Color scheme:
+  [Local] label                 Grey (not pushed)
+  [Remote] label                Cyan (pushed to remote)
+  InSync status                 Green (in sync)
+  ↑N status (ahead)             Blue (needs push)
+  ↓N status (behind)            Yellow (needs pull)
+  ↑A ↓B status (diverged)       Red (diverged)
+  ? status (unknown)            Yellow (status could not be determined)
+
 Note: status labels reflect your last fetch. To get up-to-date information, run:
   git fetch --prune
 

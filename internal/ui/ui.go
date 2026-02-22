@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/fatih/color"
 )
@@ -14,6 +15,12 @@ var (
 	colorSuccess       = color.New(color.FgGreen)
 	colorWarning       = color.New(color.FgYellow)
 	colorError         = color.New(color.FgRed)
+	colorRemoteLabel   = color.New(color.FgCyan)
+	colorInSync        = color.New(color.FgGreen)
+	colorAhead         = color.New(color.FgBlue)
+	colorBehind        = color.New(color.FgYellow)
+	colorDiverged      = color.New(color.FgRed)
+	colorUnknown       = color.New(color.FgYellow)
 )
 
 // cprint, cprintf, cprintln are thin wrappers that discard the error returned
@@ -22,6 +29,67 @@ var (
 func cprint(c *color.Color, msg string)          { _, _ = c.Print(msg) }
 func cprintf(c *color.Color, f string, a ...any) { _, _ = c.Printf(f, a...) }
 func cprintln(c *color.Color, msg string)        { _, _ = c.Println(msg) }
+
+// renderBranchTag prints a branch tag with separate colors for label and status.
+func renderBranchTag(tag string) {
+	if tag == "" {
+		return
+	}
+
+	// Parse label and status
+	var label, status string
+	if len(tag) > 7 && tag[:7] == "[Local]" {
+		label = "[Local]"
+		status = tag[7:] // everything after [Local]
+	} else if len(tag) > 8 && tag[:8] == "[Remote]" {
+		label = "[Remote]"
+		status = tag[8:] // everything after [Remote]
+	} else {
+		// Fallback: render entire tag in meta color
+		cprint(colorMeta, tag)
+		return
+	}
+
+	// Render label
+	if label == "[Local]" {
+		cprint(colorMeta, label)
+	} else {
+		cprint(colorRemoteLabel, label)
+	}
+
+	// Render status with appropriate color
+	if status == "" {
+		return
+	}
+
+	statusColor := colorMeta // default
+	if label == "[Remote]" {
+		// Choose color based on status content
+		switch {
+		case status == " InSync":
+			statusColor = colorInSync
+		case status == " ?" || status == "?":
+			statusColor = colorUnknown
+		default:
+			// Check for arrow characters using string containment
+			hasAhead := strings.Contains(status, "↑")
+			hasBehind := strings.Contains(status, "↓")
+
+			if hasAhead && hasBehind {
+				// Both ahead and behind: ↑A ↓B
+				statusColor = colorDiverged
+			} else if hasAhead {
+				// Only ahead: ↑N
+				statusColor = colorAhead
+			} else if hasBehind {
+				// Only behind: ↓N
+				statusColor = colorBehind
+			}
+		}
+	}
+
+	cprint(statusColor, status)
+}
 
 func PrintSuccess(msg string) {
 	cprintln(colorSuccess, msg)
@@ -74,7 +142,8 @@ func PrintTree(categories []string, branches map[string][]string, currentBranch 
 				cprintf(colorBranch, "%s%s", marker, branch)
 			}
 			if tag := branchTags[branch]; tag != "" {
-				cprintf(colorMeta, "  %s", tag)
+				fmt.Print("  ")
+				renderBranchTag(tag)
 			}
 			fmt.Println()
 		}
