@@ -20,9 +20,9 @@ const (
 // item represents a single navigable row in the TUI
 type item struct {
 	kind      itemKind
-	label     string   // category name or branch name
-	category  string   // parent category (branch items only)
-	tag       string   // branchTags value (branch items only)
+	label     string // category name or branch name
+	category  string // parent category (branch items only)
+	tag       string // branchTags value (branch items only)
 	isCurrent bool
 	isLast    bool // last branch in category (for └── vs ├──)
 }
@@ -31,7 +31,7 @@ type item struct {
 type viewMode int
 
 const (
-	modeBrowse  viewMode = iota
+	modeBrowse viewMode = iota
 	modeConfirm
 )
 
@@ -64,26 +64,25 @@ type checkoutResultMsg struct {
 }
 
 type worktreeStatusMsg struct {
-	branch string
 	status git.WorktreeStatus
 	err    error
 }
 
 // Lipgloss styles
 var (
-	styleCategory = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))   // cyan
-	styleCurrent  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("2"))   // green
-	styleBranch   = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))              // white
-	styleMeta     = lipgloss.NewStyle().Faint(true)                                  // faint
-	styleRemote   = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))              // magenta
-	styleInSync   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))              // green
-	styleAhead    = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))              // blue
-	styleBehind   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))              // yellow
-	styleDiverged = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))              // red
-	styleUnknown  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))              // yellow
+	styleCategory = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))                                  // cyan
+	styleCurrent  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("2"))                                  // green
+	styleBranch   = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))                                             // white
+	styleMeta     = lipgloss.NewStyle().Faint(true)                                                                 // faint
+	styleRemote   = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))                                             // magenta
+	styleInSync   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))                                             // green
+	styleAhead    = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))                                             // blue
+	styleBehind   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))                                             // yellow
+	styleDiverged = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))                                             // red
+	styleUnknown  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))                                             // yellow
 	styleSelected = lipgloss.NewStyle().Bold(true).Background(lipgloss.Color("8")).Foreground(lipgloss.Color("15")) // grey bg
-	styleWarning  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))                                               // yellow
-	styleError    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))                                               // red
+	styleWarning  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))                                             // yellow
+	styleError    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))                                             // red
 )
 
 // Async command constructors

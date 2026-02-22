@@ -204,7 +204,7 @@ func GetWorktreeStatus(gitDir string) (WorktreeStatus, error) {
 	}
 	var result WorktreeStatus
 	for _, line := range strings.Split(string(output), "\n") {
-		line = strings.TrimRight(line, "\r\n")  // Only trim line endings, not leading spaces
+		line = strings.TrimRight(line, "\r\n") // Only trim line endings, not leading spaces
 		if len(line) < 3 {
 			continue
 		}
