@@ -7,6 +7,9 @@ pre-push:
     build:
       glob: "**/*.go"
       run: go build ./...
+    test:
+      glob: "**/*.go"
+      run: go test ./...
     lint:
       glob: "**/*.go"
       run: golangci-lint run ./...

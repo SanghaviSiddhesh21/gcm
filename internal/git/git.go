@@ -74,22 +74,6 @@ func BranchExists(gitDir, branch string) (bool, error) {
 	return false, nil
 }
 
-func SwitchBranch(workDir, branch string) error {
-	cmd := exec.Command("git", "switch", branch)
-	cmd.Dir = workDir
-	if err := cmd.Run(); err == nil {
-		return nil
-	}
-
-	cmd = exec.Command("git", "checkout", branch)
-	cmd.Dir = workDir
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func runGit(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir

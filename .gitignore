@@ -18,6 +18,7 @@ build/
 # Go
 vendor/
 *.test
+coverage.out
 
 # Misc
 .DS_Store
