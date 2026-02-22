@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/mattn/go-isatty"
 	"github.com/siddhesh/gcm/internal/git"
 	"github.com/siddhesh/gcm/internal/store"
 	"github.com/siddhesh/gcm/internal/ui"
@@ -120,6 +121,17 @@ Note: branches whose remote was deleted will show as [Local] after git fetch --p
 			branchTimes = make(map[string]time.Time) // graceful degradation: preserve existing order
 		}
 		categoryNames, branchMap = sortView(categoryNames, branchMap, currentBranch, branchTimes)
+
+		if isatty.IsTerminal(os.Stdout.Fd()) {
+			checkedOut, err := ui.RunTUI(repoInfo.GitDir, categoryNames, branchMap, currentBranch, branchTags)
+			if err != nil {
+				return fmt.Errorf("TUI error: %w", err)
+			}
+			if checkedOut != "" {
+				ui.PrintSuccess(fmt.Sprintf("Switched to branch '%s'", checkedOut))
+			}
+			return nil
+		}
 
 		ui.PrintTree(categoryNames, branchMap, currentBranch, branchTags)
 		return nil

@@ -544,3 +544,172 @@ func TestBranchCommitTimes(t *testing.T) {
 		}
 	})
 }
+
+// ── TestWorktreeStatus ─────────────────────────────────────────────────────────
+
+func TestWorktreeStatus(t *testing.T) {
+	t.Run("SUCCESS_CASE: clean_worktree", func(t *testing.T) {
+		repoDir := setupTestRepo(t)
+		gitDir := filepath.Join(repoDir, ".git")
+
+		status, err := GetWorktreeStatus(gitDir)
+		if err != nil {
+			t.Fatalf("WorktreeStatus() error = %v", err)
+		}
+		if status.IsDirty() {
+			t.Errorf("WorktreeStatus() on clean repo: IsDirty() = true, want false")
+		}
+	})
+
+	t.Run("SUCCESS_CASE: untracked_file", func(t *testing.T) {
+		repoDir := setupTestRepo(t)
+		gitDir := filepath.Join(repoDir, ".git")
+
+		// Create an untracked file
+		if err := os.WriteFile(filepath.Join(repoDir, "untracked.txt"), []byte("hello"), 0644); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+
+		status, err := GetWorktreeStatus(gitDir)
+		if err != nil {
+			t.Fatalf("WorktreeStatus() error = %v", err)
+		}
+		if !status.IsDirty() {
+			t.Error("WorktreeStatus() IsDirty() = false, want true")
+		}
+		if len(status.Untracked) != 1 || status.Untracked[0] != "untracked.txt" {
+			t.Errorf("Untracked = %v, want [untracked.txt]", status.Untracked)
+		}
+		if len(status.Staged) != 0 {
+			t.Errorf("Staged = %v, want []", status.Staged)
+		}
+		if len(status.Unstaged) != 0 {
+			t.Errorf("Unstaged = %v, want []", status.Unstaged)
+		}
+	})
+
+	t.Run("SUCCESS_CASE: staged_file", func(t *testing.T) {
+		repoDir := setupTestRepo(t)
+		gitDir := filepath.Join(repoDir, ".git")
+
+		// Create and stage a new file
+		if err := os.WriteFile(filepath.Join(repoDir, "staged.txt"), []byte("hello"), 0644); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+		run(t, repoDir, "git", "add", "staged.txt")
+
+		status, err := GetWorktreeStatus(gitDir)
+		if err != nil {
+			t.Fatalf("WorktreeStatus() error = %v", err)
+		}
+		if !status.IsDirty() {
+			t.Error("WorktreeStatus() IsDirty() = false, want true")
+		}
+		if len(status.Staged) != 1 || status.Staged[0] != "staged.txt" {
+			t.Errorf("Staged = %v, want [staged.txt]", status.Staged)
+		}
+		if len(status.Unstaged) != 0 {
+			t.Errorf("Unstaged = %v, want []", status.Unstaged)
+		}
+		if len(status.Untracked) != 0 {
+			t.Errorf("Untracked = %v, want []", status.Untracked)
+		}
+	})
+
+	t.Run("SUCCESS_CASE: unstaged_modification", func(t *testing.T) {
+		repoDir := setupTestRepo(t)
+		gitDir := filepath.Join(repoDir, ".git")
+
+		// Create and commit a file
+		if err := os.WriteFile(filepath.Join(repoDir, "tracked.txt"), []byte("v1"), 0644); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+		run(t, repoDir, "git", "add", "tracked.txt")
+		run(t, repoDir, "git", "commit", "-m", "add tracked.txt")
+
+		// Modify without staging
+		if err := os.WriteFile(filepath.Join(repoDir, "tracked.txt"), []byte("v2"), 0644); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+
+		status, err := GetWorktreeStatus(gitDir)
+		if err != nil {
+			t.Fatalf("WorktreeStatus() error = %v", err)
+		}
+		if !status.IsDirty() {
+			t.Error("WorktreeStatus() IsDirty() = false, want true")
+		}
+		if len(status.Unstaged) != 1 || status.Unstaged[0] != "tracked.txt" {
+			t.Errorf("Unstaged = %v, want [tracked.txt]", status.Unstaged)
+		}
+		if len(status.Staged) != 0 {
+			t.Errorf("Staged = %v, want []", status.Staged)
+		}
+	})
+}
+
+// ── TestCheckout ──────────────────────────────────────────────────────────────
+
+func TestCheckout(t *testing.T) {
+	t.Run("SUCCESS_CASE: switch_to_existing_branch", func(t *testing.T) {
+		repoDir := setupTestRepo(t)
+		gitDir := filepath.Join(repoDir, ".git")
+		createBranch(t, repoDir, "feature")
+
+		if err := Checkout(gitDir, "feature"); err != nil {
+			t.Fatalf("Checkout() error = %v", err)
+		}
+
+		current, err := CurrentBranch(gitDir)
+		if err != nil {
+			t.Fatalf("CurrentBranch() error = %v", err)
+		}
+		if current != "feature" {
+			t.Errorf("CurrentBranch() = %q, want %q", current, "feature")
+		}
+	})
+
+	t.Run("SUCCESS_CASE: switch_back_to_main", func(t *testing.T) {
+		repoDir := setupTestRepo(t)
+		gitDir := filepath.Join(repoDir, ".git")
+		createBranch(t, repoDir, "feature")
+		run(t, repoDir, "git", "checkout", "feature")
+
+		if err := Checkout(gitDir, "main"); err != nil {
+			t.Fatalf("Checkout() error = %v", err)
+		}
+
+		current, err := CurrentBranch(gitDir)
+		if err != nil {
+			t.Fatalf("CurrentBranch() error = %v", err)
+		}
+		if current != "main" {
+			t.Errorf("CurrentBranch() = %q, want %q", current, "main")
+		}
+	})
+
+	t.Run("ERROR_CASE: nonexistent_branch", func(t *testing.T) {
+		repoDir := setupTestRepo(t)
+		gitDir := filepath.Join(repoDir, ".git")
+
+		err := Checkout(gitDir, "does-not-exist")
+		if err == nil {
+			t.Error("Checkout() expected error for nonexistent branch, got nil")
+		}
+	})
+
+	t.Run("SUCCESS_CASE: checkout_with_clean_worktree", func(t *testing.T) {
+		repoDir := setupTestRepo(t)
+		gitDir := filepath.Join(repoDir, ".git")
+		createBranch(t, repoDir, "dev")
+
+		if err := Checkout(gitDir, "dev"); err != nil {
+			t.Fatalf("Checkout() error = %v", err)
+		}
+
+		// Do it again to same branch — git does not error on this
+		if err := Checkout(gitDir, "dev"); err != nil {
+			t.Fatalf("Checkout() second call error = %v", err)
+		}
+	})
+}

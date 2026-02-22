@@ -182,6 +182,58 @@ func BranchCommitTimes(gitDir string) (map[string]time.Time, error) {
 	return result, nil
 }
 
+type WorktreeStatus struct {
+	Staged    []string
+	Unstaged  []string
+	Untracked []string
+}
+
+func (s WorktreeStatus) IsDirty() bool {
+	return len(s.Staged) > 0 || len(s.Unstaged) > 0 || len(s.Untracked) > 0
+}
+
+// GetWorktreeStatus returns the dirty state of the working tree at gitDir.
+// It runs `git status --porcelain=v1` and parses each line.
+func GetWorktreeStatus(gitDir string) (WorktreeStatus, error) {
+	wd := workDir(gitDir)
+	cmd := exec.Command("git", "status", "--porcelain=v1")
+	cmd.Dir = wd
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return WorktreeStatus{}, fmt.Errorf("git status failed: %w", err)
+	}
+	var result WorktreeStatus
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimRight(line, "\r\n")  // Only trim line endings, not leading spaces
+		if len(line) < 3 {
+			continue
+		}
+		x, y := line[0], line[1]
+		name := strings.TrimSpace(line[3:])
+		switch {
+		case x == '?' && y == '?':
+			result.Untracked = append(result.Untracked, name)
+		default:
+			if x != ' ' && x != '?' {
+				result.Staged = append(result.Staged, name)
+			}
+			if y != ' ' && y != '?' {
+				result.Unstaged = append(result.Unstaged, name)
+			}
+		}
+	}
+	return result, nil
+}
+
+// Checkout switches the working tree to the given branch.
+func Checkout(gitDir, branch string) error {
+	_, err := runGit(workDir(gitDir), "checkout", branch)
+	if err != nil {
+		return fmt.Errorf("git checkout %s: %w", branch, err)
+	}
+	return nil
+}
+
 func runGit(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
