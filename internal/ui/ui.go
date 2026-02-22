@@ -64,25 +64,19 @@ func renderBranchTag(tag string) {
 
 	statusColor := colorMeta // default
 	if label == "[Remote]" {
-		// Choose color based on status content
-		switch {
-		case status == " InSync":
+		switch status {
+		case " InSync":
 			statusColor = colorInSync
-		case status == " ?" || status == "?":
+		case " ?", "?":
 			statusColor = colorUnknown
 		default:
-			// Check for arrow characters using string containment
 			hasAhead := strings.Contains(status, "↑")
 			hasBehind := strings.Contains(status, "↓")
-
 			if hasAhead && hasBehind {
-				// Both ahead and behind: ↑A ↓B
 				statusColor = colorDiverged
 			} else if hasAhead {
-				// Only ahead: ↑N
 				statusColor = colorAhead
 			} else if hasBehind {
-				// Only behind: ↓N
 				statusColor = colorBehind
 			}
 		}
