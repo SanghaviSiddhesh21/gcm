@@ -19,6 +19,7 @@ build/
 vendor/
 *.test
 coverage.out
+coverage.html
 
 # Misc
 .DS_Store

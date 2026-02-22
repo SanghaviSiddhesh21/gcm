@@ -35,7 +35,7 @@ func PrintError(msg string) {
 	cprintln(colorError, msg)
 }
 
-func PrintTree(categories []string, branches map[string][]string, currentBranch string) {
+func PrintTree(categories []string, branches map[string][]string, currentBranch string, branchTags map[string]string) {
 	for _, category := range categories {
 		catBranches, exists := branches[category]
 		if !exists {
@@ -67,13 +67,16 @@ func PrintTree(categories []string, branches map[string][]string, currentBranch 
 				marker = "● "
 			}
 
+			fmt.Printf("%s", prefix)
 			if branch == currentBranch {
-				fmt.Printf("%s", prefix)
-				cprintf(colorCurrentBranch, "%s%s\n", marker, branch)
+				cprintf(colorCurrentBranch, "%s%s", marker, branch)
 			} else {
-				fmt.Printf("%s", prefix)
-				cprintf(colorBranch, "%s%s\n", marker, branch)
+				cprintf(colorBranch, "%s%s", marker, branch)
 			}
+			if tag := branchTags[branch]; tag != "" {
+				cprintf(colorMeta, "  %s", tag)
+			}
+			fmt.Println()
 		}
 	}
 }

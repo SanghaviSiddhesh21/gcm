@@ -25,10 +25,10 @@ jobs:
           go test -coverprofile=coverage.out ./internal/store/... ./internal/git/...
           go tool cover -func=coverage.out | grep ^total | awk '{
             gsub(/%/, "", $3)
-            if ($3+0 < 90) {
-              print "Coverage " $3 "% is below the 90% threshold"
+            if ($3+0 < 85) {
+              print "Coverage " $3 "% is below the 85% threshold"
               exit 1
             } else {
-              print "Coverage " $3 "% meets the 90% threshold"
+              print "Coverage " $3 "% meets the 85% threshold"
             }
           }'

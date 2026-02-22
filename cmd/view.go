@@ -13,6 +13,20 @@ import (
 var viewCmd = &cobra.Command{
 	Use:   "view [category]",
 	Short: "View branches organized by category",
+	Long: `View branches organized by category.
+
+Branch status labels:
+  [Local]        Branch exists only on your machine — not pushed to remote yet
+  [Remote] InSync  Pushed to remote, local and remote are identical
+  [Remote] ↑N    Pushed to remote, you have N local commits not yet pushed
+  [Remote] ↓N    Pushed to remote, remote has N commits you have not pulled yet
+  [Remote] ↑A ↓B Pushed to remote, diverged — A commits ahead and B commits behind
+  [Remote] ?     Pushed to remote, but sync status could not be determined
+
+Note: status labels reflect your last fetch. To get up-to-date information, run:
+  git fetch --prune
+
+Note: branches whose remote was deleted will show as [Local] after git fetch --prune.`,
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		repoInfo, err := git.GetRepoInfo()
@@ -66,9 +80,46 @@ var viewCmd = &cobra.Command{
 			categoryNames = append(categoryNames, cat.Name)
 		}
 
-		ui.PrintTree(categoryNames, branchMap, currentBranch)
+			remoteBranches, err := git.ListRemoteBranches(repoInfo.GitDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		return err
+	}
+	remoteSet := make(map[string]bool, len(remoteBranches))
+	for _, b := range remoteBranches {
+		remoteSet[b] = true
+	}
+
+	branchTags := make(map[string]string)
+	for _, branch := range allBranches {
+		if !remoteSet[branch] {
+			branchTags[branch] = "[Local]"
+			continue
+		}
+		ahead, behind, err := git.SyncStatus(repoInfo.GitDir, branch)
+		if err != nil {
+			branchTags[branch] = "[Remote] ?"
+			continue
+		}
+		branchTags[branch] = formatSyncTag(ahead, behind)
+	}
+
+	ui.PrintTree(categoryNames, branchMap, currentBranch, branchTags)
 		return nil
 	},
+}
+
+func formatSyncTag(ahead, behind int) string {
+	switch {
+	case ahead == 0 && behind == 0:
+		return "[Remote] InSync"
+	case ahead > 0 && behind == 0:
+		return fmt.Sprintf("[Remote] ↑%d", ahead)
+	case ahead == 0 && behind > 0:
+		return fmt.Sprintf("[Remote] ↓%d", behind)
+	default:
+		return fmt.Sprintf("[Remote] ↑%d ↓%d", ahead, behind)
+	}
 }
 
 func init() {

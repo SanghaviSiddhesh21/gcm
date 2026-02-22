@@ -40,10 +40,25 @@ func createBranch(t *testing.T, repoDir, branchName string) {
 	run(t, repoDir, "git", "branch", branchName)
 }
 
+// setupTestRepoWithRemote creates a bare repo (remote) and a working repo with
+// the bare repo configured as "origin". It pushes "main" so the remote tracking
+// ref exists. Returns (workingDir, bareDir).
+func setupTestRepoWithRemote(t *testing.T) (string, string) {
+	t.Helper()
+	bareDir := t.TempDir()
+	run(t, bareDir, "git", "init", "--bare", "-b", "main")
+
+	workDir := setupTestRepo(t)
+	run(t, workDir, "git", "remote", "add", "origin", bareDir)
+	run(t, workDir, "git", "push", "-u", "origin", "main")
+
+	return workDir, bareDir
+}
+
 // ── TestGetRepoInfo ───────────────────────────────────────────────────────────
 
 func TestGetRepoInfo(t *testing.T) {
-	t.Run("inside-git-repo", func(t *testing.T) {
+	t.Run("SUCCESS_CASE: inside_git_repo", func(t *testing.T) {
 		repoDir := setupTestRepo(t)
 
 		orig, err := os.Getwd()
@@ -67,7 +82,7 @@ func TestGetRepoInfo(t *testing.T) {
 		}
 	})
 
-	t.Run("outside-git-repo", func(t *testing.T) {
+	t.Run("ERROR_CASE: outside_git_repo", func(t *testing.T) {
 		dir := t.TempDir() // plain directory — not a git repo
 
 		orig, err := os.Getwd()
@@ -89,7 +104,7 @@ func TestGetRepoInfo(t *testing.T) {
 // ── TestListBranches ──────────────────────────────────────────────────────────
 
 func TestListBranches(t *testing.T) {
-	t.Run("single-branch", func(t *testing.T) {
+	t.Run("SUCCESS_CASE: single_branch", func(t *testing.T) {
 		repoDir := setupTestRepo(t)
 		gitDir := filepath.Join(repoDir, ".git")
 
@@ -105,7 +120,7 @@ func TestListBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("multiple-branches", func(t *testing.T) {
+	t.Run("SUCCESS_CASE: multiple_branches", func(t *testing.T) {
 		repoDir := setupTestRepo(t)
 		gitDir := filepath.Join(repoDir, ".git")
 		createBranch(t, repoDir, "feature")
@@ -129,7 +144,7 @@ func TestListBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("relative-gitdir", func(t *testing.T) {
+	t.Run("SUCCESS_CASE: relative_gitdir", func(t *testing.T) {
 		// Covers the gitDir == ".git" special case in ListBranches.
 		// When gitDir is the literal string ".git", workDir is set to "."
 		// so we must be chdir-ed into the repo first.
@@ -157,7 +172,7 @@ func TestListBranches(t *testing.T) {
 // ── TestCurrentBranch ─────────────────────────────────────────────────────────
 
 func TestCurrentBranch(t *testing.T) {
-	t.Run("absolute-gitdir", func(t *testing.T) {
+	t.Run("SUCCESS_CASE: absolute_gitdir", func(t *testing.T) {
 		repoDir := setupTestRepo(t)
 		gitDir := filepath.Join(repoDir, ".git")
 
@@ -170,7 +185,7 @@ func TestCurrentBranch(t *testing.T) {
 		}
 	})
 
-	t.Run("relative-gitdir", func(t *testing.T) {
+	t.Run("SUCCESS_CASE: relative_gitdir", func(t *testing.T) {
 		// Covers the gitDir == ".git" special case in CurrentBranch.
 		repoDir := setupTestRepo(t)
 
@@ -200,7 +215,7 @@ func TestBranchExists(t *testing.T) {
 	gitDir := filepath.Join(repoDir, ".git")
 	createBranch(t, repoDir, "feature")
 
-	t.Run("existing-branch", func(t *testing.T) {
+	t.Run("SUCCESS_CASE: existing_branch", func(t *testing.T) {
 		exists, err := BranchExists(gitDir, "feature")
 		if err != nil {
 			t.Fatalf("BranchExists() error = %v", err)
@@ -210,13 +225,194 @@ func TestBranchExists(t *testing.T) {
 		}
 	})
 
-	t.Run("non-existing-branch", func(t *testing.T) {
+	t.Run("SUCCESS_CASE: non_existing_branch", func(t *testing.T) {
 		exists, err := BranchExists(gitDir, "non-existent")
 		if err != nil {
 			t.Fatalf("BranchExists() error = %v", err)
 		}
 		if exists {
 			t.Error("BranchExists(non-existent) = true, want false")
+		}
+	})
+}
+
+// ── TestListRemoteBranches ────────────────────────────────────────────────────
+
+func TestListRemoteBranches(t *testing.T) {
+	t.Run("ERROR_CASE: no_remote_configured", func(t *testing.T) {
+		repoDir := setupTestRepo(t)
+		gitDir := filepath.Join(repoDir, ".git")
+
+		branches, err := ListRemoteBranches(gitDir)
+		if err != nil {
+			t.Fatalf("ListRemoteBranches() error = %v", err)
+		}
+		if len(branches) != 0 {
+			t.Errorf("expected empty slice, got %v", branches)
+		}
+	})
+
+	t.Run("SUCCESS_CASE: pushed_branch_appears", func(t *testing.T) {
+		workDir, _ := setupTestRepoWithRemote(t)
+		gitDir := filepath.Join(workDir, ".git")
+
+		branches, err := ListRemoteBranches(gitDir)
+		if err != nil {
+			t.Fatalf("ListRemoteBranches() error = %v", err)
+		}
+
+		found := false
+		for _, b := range branches {
+			if b == "main" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("ListRemoteBranches() = %v, want to contain \"main\"", branches)
+		}
+	})
+
+	t.Run("SUCCESS_CASE: unpushed_branch_absent", func(t *testing.T) {
+		workDir, _ := setupTestRepoWithRemote(t)
+		gitDir := filepath.Join(workDir, ".git")
+
+		// Create a local branch but do NOT push it.
+		createBranch(t, workDir, "local-only")
+
+		branches, err := ListRemoteBranches(gitDir)
+		if err != nil {
+			t.Fatalf("ListRemoteBranches() error = %v", err)
+		}
+		for _, b := range branches {
+			if b == "local-only" {
+				t.Errorf("ListRemoteBranches() contains local-only branch, want absent")
+			}
+		}
+	})
+
+	t.Run("SUCCESS_CASE: relative_gitdir", func(t *testing.T) {
+		workDir, _ := setupTestRepoWithRemote(t)
+
+		orig, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("Getwd: %v", err)
+		}
+		defer os.Chdir(orig) //nolint:errcheck
+		if err := os.Chdir(workDir); err != nil {
+			t.Fatalf("Chdir: %v", err)
+		}
+
+		branches, err := ListRemoteBranches(".git")
+		if err != nil {
+			t.Fatalf("ListRemoteBranches(.git) error = %v", err)
+		}
+		found := false
+		for _, b := range branches {
+			if b == "main" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("ListRemoteBranches(.git) = %v, want to contain main", branches)
+		}
+	})
+}
+
+// ── TestSyncStatus ────────────────────────────────────────────────────────────
+
+func TestSyncStatus(t *testing.T) {
+	t.Run("SUCCESS_CASE: in_sync", func(t *testing.T) {
+		workDir, _ := setupTestRepoWithRemote(t)
+		gitDir := filepath.Join(workDir, ".git")
+
+		ahead, behind, err := SyncStatus(gitDir, "main")
+		if err != nil {
+			t.Fatalf("SyncStatus() error = %v", err)
+		}
+		if ahead != 0 || behind != 0 {
+			t.Errorf("SyncStatus() = (%d, %d), want (0, 0)", ahead, behind)
+		}
+	})
+
+	t.Run("SUCCESS_CASE: ahead", func(t *testing.T) {
+		workDir, _ := setupTestRepoWithRemote(t)
+		gitDir := filepath.Join(workDir, ".git")
+
+		// Make 2 local commits that have NOT been pushed.
+		run(t, workDir, "git", "commit", "--allow-empty", "-m", "local commit 1")
+		run(t, workDir, "git", "commit", "--allow-empty", "-m", "local commit 2")
+
+		ahead, behind, err := SyncStatus(gitDir, "main")
+		if err != nil {
+			t.Fatalf("SyncStatus() error = %v", err)
+		}
+		if ahead != 2 || behind != 0 {
+			t.Errorf("SyncStatus() = (%d, %d), want (2, 0)", ahead, behind)
+		}
+	})
+
+	t.Run("SUCCESS_CASE: behind", func(t *testing.T) {
+		workDir, bareDir := setupTestRepoWithRemote(t)
+		gitDir := filepath.Join(workDir, ".git")
+
+		// Clone a second working copy to push a commit without involving workDir.
+		workDir2 := t.TempDir()
+		run(t, workDir2, "git", "clone", bareDir, ".")
+		run(t, workDir2, "git", "config", "user.email", "test@gcm.test")
+		run(t, workDir2, "git", "config", "user.name", "GCM Test")
+		run(t, workDir2, "git", "commit", "--allow-empty", "-m", "remote commit")
+		run(t, workDir2, "git", "push", "origin", "main")
+
+		// Now fetch in workDir so tracking ref updates.
+		run(t, workDir, "git", "fetch", "origin")
+
+		ahead, behind, err := SyncStatus(gitDir, "main")
+		if err != nil {
+			t.Fatalf("SyncStatus() error = %v", err)
+		}
+		if ahead != 0 || behind != 1 {
+			t.Errorf("SyncStatus() = (%d, %d), want (0, 1)", ahead, behind)
+		}
+	})
+
+	t.Run("ERROR_CASE: no_remote_ref", func(t *testing.T) {
+		repoDir := setupTestRepo(t)
+		gitDir := filepath.Join(repoDir, ".git")
+
+		// "main" exists locally but no remote configured → SyncStatus should error.
+		_, _, err := SyncStatus(gitDir, "main")
+		if err == nil {
+			t.Error("SyncStatus() expected error when remote ref absent, got nil")
+		}
+	})
+
+	t.Run("SUCCESS_CASE: multiple_commits_ahead_behind", func(t *testing.T) {
+		workDir, bareDir := setupTestRepoWithRemote(t)
+		gitDir := filepath.Join(workDir, ".git")
+
+		// Create a second clone and push multiple commits
+		workDir2 := t.TempDir()
+		run(t, workDir2, "git", "clone", bareDir, ".")
+		run(t, workDir2, "git", "config", "user.email", "test@gcm.test")
+		run(t, workDir2, "git", "config", "user.name", "GCM Test")
+		run(t, workDir2, "git", "commit", "--allow-empty", "-m", "remote 1")
+		run(t, workDir2, "git", "commit", "--allow-empty", "-m", "remote 2")
+		run(t, workDir2, "git", "commit", "--allow-empty", "-m", "remote 3")
+		run(t, workDir2, "git", "push", "origin", "main")
+
+		// Make multiple local commits
+		run(t, workDir, "git", "commit", "--allow-empty", "-m", "local 1")
+		run(t, workDir, "git", "commit", "--allow-empty", "-m", "local 2")
+
+		// Fetch so tracking ref is current
+		run(t, workDir, "git", "fetch", "origin")
+
+		ahead, behind, err := SyncStatus(gitDir, "main")
+		if err != nil {
+			t.Fatalf("SyncStatus() error = %v", err)
+		}
+		if ahead != 2 || behind != 3 {
+			t.Errorf("SyncStatus() = (%d, %d), want (2, 3)", ahead, behind)
 		}
 	})
 }
