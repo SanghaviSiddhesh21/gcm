@@ -43,9 +43,10 @@ type model struct {
 	branchTags    map[string]string
 	currentBranch string
 
-	items     []item
-	cursor    int
-	collapsed map[string]bool
+	items            []item
+	cursor           int
+	collapsed        map[string]bool
+	viewportStartIdx int // First visible item in viewport
 
 	mode          viewMode
 	confirmTarget string
@@ -126,12 +127,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.cursor > 0 {
 					m.cursor--
 				}
+				m.ensureVisible()
 				return m, nil
 
 			case "down":
 				if m.cursor < len(m.items)-1 {
 					m.cursor++
 				}
+				m.ensureVisible()
 				return m, nil
 
 			case " ", "right":
@@ -144,6 +147,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if m.cursor >= len(m.items) {
 						m.cursor = len(m.items) - 1
 					}
+					m.ensureVisible()
 				}
 				return m, nil
 
@@ -215,6 +219,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// ensureVisible adjusts viewportStartIdx so cursor stays within visible area
+func (m *model) ensureVisible() {
+	footerHeight := 2 // error line + hint line
+	visibleHeight := m.height - footerHeight
+
+	if visibleHeight <= 0 {
+		m.viewportStartIdx = 0
+		return
+	}
+
+	// If cursor is above viewport, scroll up
+	if m.cursor < m.viewportStartIdx {
+		m.viewportStartIdx = m.cursor
+	}
+
+	// If cursor is below viewport, scroll down
+	if m.cursor >= m.viewportStartIdx+visibleHeight {
+		m.viewportStartIdx = m.cursor - visibleHeight + 1
+	}
+}
+
 // View implements the Bubbletea View method
 func (m model) View() string {
 	var sb strings.Builder
@@ -244,8 +269,16 @@ func (m model) View() string {
 		return sb.String()
 	}
 
-	// Tree body
-	for i, it := range m.items {
+	// Tree body - only render visible items
+	footerHeight := 2
+	visibleHeight := m.height - footerHeight
+	endIdx := m.viewportStartIdx + visibleHeight
+	if endIdx > len(m.items) {
+		endIdx = len(m.items)
+	}
+
+	for i := m.viewportStartIdx; i < endIdx; i++ {
+		it := m.items[i]
 		isSelected := i == m.cursor
 
 		switch it.kind {
@@ -432,15 +465,16 @@ func RunTUI(
 	}
 
 	m := model{
-		gitDir:        gitDir,
-		categories:    categories,
-		branchMap:     branchMap,
-		branchTags:    branchTags,
-		currentBranch: currentBranch,
-		items:         items,
-		cursor:        cursor,
-		collapsed:     make(map[string]bool),
-		mode:          modeBrowse,
+		gitDir:           gitDir,
+		categories:       categories,
+		branchMap:        branchMap,
+		branchTags:       branchTags,
+		currentBranch:    currentBranch,
+		items:            items,
+		cursor:           cursor,
+		collapsed:        make(map[string]bool),
+		mode:             modeBrowse,
+		viewportStartIdx: 0,
 	}
 
 	p := tea.NewProgram(m)
