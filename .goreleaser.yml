@@ -23,12 +23,15 @@ builds:
       - arm64
 
 archives:
-  - format: tar.gz
-    format_overrides:
+  - format_overrides:
       - goos: windows
         format: zip
+      - goos: darwin
+        format: tar.gz
+      - goos: linux
+        format: tar.gz
 
-brews:
+homebrew:
   - repository:
       owner: SanghaviSiddhesh21
       name: homebrew-tap
