@@ -29,7 +29,7 @@ archives:
         format: zip
 
 brews:
-  - tap:
+  - repository:
       owner: SanghaviSiddhesh21
       name: homebrew-tap
     commit_author:
