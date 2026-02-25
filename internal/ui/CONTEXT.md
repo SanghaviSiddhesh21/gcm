@@ -42,6 +42,10 @@ Entry point: `RunCommitTUI(branch, diff, status, gen) (string, error)`. Returns 
 `tui_commit_test.go` — 6 tests for `countDiffLines`:
 - empty diff, context-only lines (not counted), added/removed lines counted, `+++`/`---` file headers excluded, `@@` hunk headers excluded, large diff above threshold
 
+`tui_view_test.go` — tests for `renderTagLipgloss` and `buildItems`:
+- `renderTagLipgloss`: empty tag, unknown tag, Local, Remote InSync, ahead, behind, diverged, unknown status
+- `buildItems`: empty input, category with no branches, `isCurrent` set on correct branch, `isLast` set only on last branch per category, multiple categories item count, tag assigned to branch item
+
 ## Gotchas
 
 - The view TUI and static renderer have parallel but separate tag-rendering logic (`renderBranchTag` in `ui.go` vs `renderTagLipgloss` in `tui_view.go`). Changes to tag formatting must be made in both places.
