@@ -21,13 +21,17 @@ Commands:
   gcm view [category]             View branches organized by category
   gcm categories                  List all categories
   gcm delete <category>           Delete a category (branches move to Uncategorized)
+  gcm commit                      Create a commit (wraps git commit)
+  gcm commit -g                   Generate a commit message using local AI
 
 Examples:
   gcm init
   gcm create feature
   gcm assign my-branch feature
   gcm view
-  gcm view feature`,
+  gcm view feature
+  gcm commit -m "My message"
+  gcm commit -g`,
 	Version:       version,
 	SilenceUsage:  true,
 	SilenceErrors: true,

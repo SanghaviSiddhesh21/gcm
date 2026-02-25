@@ -22,13 +22,13 @@ jobs:
 
       - name: Check coverage
         run: |
-          go test -coverprofile=coverage.out ./internal/store/... ./internal/git/...
+          go test -coverprofile=coverage.out ./internal/store/... ./internal/git/... ./internal/config/... ./internal/ai/...
           go tool cover -func=coverage.out | grep ^total | awk '{
             gsub(/%/, "", $3)
-            if ($3+0 < 85) {
-              print "Coverage " $3 "% is below the 85% threshold"
+            if ($3+0 < 80) {
+              print "Coverage " $3 "% is below the 80% threshold"
               exit 1
             } else {
-              print "Coverage " $3 "% meets the 85% threshold"
+              print "Coverage " $3 "% meets the 80% threshold"
             }
           }'

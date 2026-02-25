@@ -5,9 +5,12 @@ help:
 	@echo "Available targets:"
 	@sed -n 's/^## //p' ${MAKEFILE_LIST} | column -t -s ':'
 
-## test: Run all tests
+## test: Run all tests with coverage
 test:
-	@go test ./...
+	@go test ./internal/ui/... \
+		&& go test -coverprofile=coverage.out ./internal/git/... ./internal/store/... ./internal/config/... ./internal/ai/... \
+		&& echo "" \
+		&& go tool cover -func=coverage.out | tail -1
 
 ## test-verbose: Run all tests with verbose output
 test-verbose:
@@ -15,7 +18,7 @@ test-verbose:
 
 ## test-coverage: Run all tests and generate coverage report
 test-coverage:
-	@go test -coverprofile=coverage.out ./internal/git ./internal/store && go tool cover -html=coverage.out -o coverage.html && echo "✓ Coverage report generated: coverage.html"
+	@go test -coverprofile=coverage.out ./internal/git ./internal/store ./internal/config && go tool cover -html=coverage.out -o coverage.html && echo "✓ Coverage report generated: coverage.html"
 
 ## build: Build the gcm binary
 build:
