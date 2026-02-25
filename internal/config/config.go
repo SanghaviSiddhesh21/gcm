@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 )
 
-// ErrNotSet is returned when the requested key has no value.
 var ErrNotSet = errors.New("not set")
 
 type file struct {
@@ -53,7 +52,6 @@ func save(f file) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-// GetAPIKey returns the stored API key, or ErrNotSet if absent.
 func GetAPIKey() (string, error) {
 	f, err := load()
 	if err != nil {
@@ -65,7 +63,6 @@ func GetAPIKey() (string, error) {
 	return f.APIKey, nil
 }
 
-// SetAPIKey stores the API key.
 func SetAPIKey(key string) error {
 	f, err := load()
 	if err != nil {
@@ -75,7 +72,6 @@ func SetAPIKey(key string) error {
 	return save(f)
 }
 
-// UnsetAPIKey removes the API key.
 func UnsetAPIKey() error {
 	f, err := load()
 	if err != nil {

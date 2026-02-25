@@ -15,19 +15,16 @@ import (
 	"github.com/siddhesh/gcm/internal/git"
 )
 
-// ErrCommitAborted is returned by RunCommitTUI when the user quits without committing.
 var ErrCommitAborted = errors.New("commit aborted")
 
-// commitMode discriminates between TUI states.
 type commitMode int
 
 const (
-	modeGenerating  commitMode = iota // LLM is running
-	modeReview                        // Message ready, awaiting user decision
-	modeManualInput                   // Model absent or failed, asking for manual input
+	modeGenerating  commitMode = iota
+	modeReview
+	modeManualInput
 )
 
-// manualInputReason controls which warning message is shown above the manual prompt.
 type manualInputReason int
 
 const (
@@ -38,12 +35,10 @@ const (
 
 const maxGenerationRetries = 3
 
-// Async message types --------------------------------------------------------
-
 type generateResultMsg struct {
 	message      string
 	err          error
-	generationID int // stale results (from cancelled generation) are discarded
+	generationID int // stale results from a superseded generation are discarded
 }
 
 type editorDoneMsg struct {
@@ -52,8 +47,6 @@ type editorDoneMsg struct {
 }
 
 type spinnerTickMsg struct{}
-
-// Lipgloss styles ------------------------------------------------------------
 
 var (
 	styleCommitHeader  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))  // cyan
@@ -67,38 +60,34 @@ var (
 
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
-// commitModel is the Bubbletea model for the commit TUI. -------------------
-
 const largeDiffThreshold = 500
 
 type commitModel struct {
 	diff      string
-	diffLines int // number of added+removed lines in the staged diff
+	diffLines int
 	status    git.WorktreeStatus
 	gen       ai.Generator
 
 	mode         commitMode
-	message      string            // current commit message (generated or edited)
-	manualInput  string            // buffer for manual text entry
-	manualReason manualInputReason // controls the warning shown above manual prompt
+	message      string
+	manualInput  string
+	manualReason manualInputReason
 	retryCount   int
-	generationID int // incremented on each regenerate to discard stale results
+	generationID int
 	spinnerFrame int
 
-	cursorRow    int  // 0 = Staged row, 1 = Unstaged row (used for dropdown navigation)
-	stagedOpen   bool // whether Staged files dropdown is expanded
-	unstagedOpen bool // whether Unstaged files dropdown is expanded
+	cursorRow    int
+	stagedOpen   bool
+	unstagedOpen bool
 
-	manualErrMsg string // inline validation error on manual input
+	manualErrMsg string
 
-	result  string // message to commit — set before tea.Quit
-	aborted bool   // true when user quits without committing
+	result  string
+	aborted bool
 
 	width  int
 	height int
 }
-
-// Async command constructors ------------------------------------------------
 
 func doGenerate(gen ai.Generator, diff string, id int) tea.Cmd {
 	return func() tea.Msg {
@@ -115,16 +104,12 @@ func spinnerTick() tea.Cmd {
 	})
 }
 
-// Init starts the first generation attempt and the spinner. -----------------
-
 func (m commitModel) Init() tea.Cmd {
 	return tea.Batch(
 		doGenerate(m.gen, m.diff, m.generationID),
 		spinnerTick(),
 	)
 }
-
-// Update handles all messages and key events. --------------------------------
 
 func (m commitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -142,7 +127,6 @@ func (m commitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case generateResultMsg:
-		// Discard results from a superseded generation (user pressed 'r')
 		if msg.generationID != m.generationID {
 			return m, nil
 		}
@@ -151,7 +135,6 @@ func (m commitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.message = msg.message
 			return m, nil
 		}
-		// Generation failed — retry or fall back to manual input
 		if errors.Is(msg.err, ai.ErrNotConfigured) {
 			m.mode = modeManualInput
 			m.manualReason = reasonModelNotFound
@@ -173,7 +156,6 @@ func (m commitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case editorDoneMsg:
 		if msg.err != nil || strings.TrimSpace(msg.message) == "" {
-			// Editor produced empty or errored — stay in review with original message
 			return m, nil
 		}
 		m.message = msg.message
@@ -187,10 +169,7 @@ func (m commitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleKey routes key events based on current mode. ------------------------
-
 func (m commitModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Ctrl+C works in all modes
 	if msg.String() == "ctrl+c" {
 		m.aborted = true
 		return m, tea.Quit
@@ -199,7 +178,6 @@ func (m commitModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 
 	case modeGenerating:
-		// No keys active during generation except Ctrl+C (handled above)
 		return m, nil
 
 	case modeReview:
@@ -213,7 +191,6 @@ func (m commitModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "r", "R":
-			// Regenerate: increment ID so the previous result is discarded, restart
 			m.generationID++
 			m.retryCount = 0
 			m.mode = modeGenerating
@@ -266,7 +243,6 @@ func (m commitModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		default:
-			// Accept printable characters
 			if len(msg.String()) == 1 {
 				m.manualInput += msg.String()
 				m.manualErrMsg = ""
@@ -278,8 +254,6 @@ func (m commitModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// openEditor suspends the TUI, opens $EDITOR with the current message,
-// then resumes and returns the edited content.
 func (m commitModel) openEditor() (tea.Model, tea.Cmd) {
 	tmpFile, err := os.CreateTemp("", "gcm-commit-*.txt")
 	if err != nil {
@@ -310,8 +284,6 @@ func (m commitModel) openEditor() (tea.Model, tea.Cmd) {
 	})
 }
 
-// View renders the current TUI state. ----------------------------------------
-
 func (m commitModel) View() string {
 	var sb strings.Builder
 
@@ -322,7 +294,6 @@ func (m commitModel) View() string {
 		sb.WriteString(styleCommitMeta.Render(fmt.Sprintf("%s Generating commit message...\n", frame)))
 
 	case modeReview:
-		// Staged files dropdown
 		stagedArrow := "▼"
 		if m.stagedOpen {
 			stagedArrow = "▲"
@@ -339,7 +310,6 @@ func (m commitModel) View() string {
 			}
 		}
 
-		// Unstaged files dropdown
 		unstagedArrow := "▼"
 		if m.unstagedOpen {
 			unstagedArrow = "▲"
@@ -356,12 +326,10 @@ func (m commitModel) View() string {
 			}
 		}
 
-		// Large diff warning
 		if m.diffLines > largeDiffThreshold {
 			sb.WriteString(styleCommitWarning.Render(fmt.Sprintf("⚠ Large changeset (~%d lines) — generated message may not capture all changes. Press 'e' to refine or 'r' to retry.", m.diffLines)) + "\n")
 		}
 
-		// Generated message
 		sb.WriteString("\n")
 		sb.WriteString(styleCommitMeta.Render("Generated message:") + "\n")
 		sb.WriteString(styleCommitMessage.Render(m.message) + "\n")
@@ -372,7 +340,6 @@ func (m commitModel) View() string {
 		sb.WriteString(styleCommitMeta.Render("↑/↓ navigate dropdowns  space/enter expand  y accept  e edit  r regenerate  q quit"))
 
 	case modeManualInput:
-		// Warning message varies based on reason
 		switch m.manualReason {
 		case reasonModelNotFound:
 			sb.WriteString(styleCommitError.Render("✗ Error: \"AI not configured\"") + "\n")
@@ -397,9 +364,6 @@ func (m commitModel) View() string {
 	return sb.String()
 }
 
-// RunCommitTUI launches the interactive commit TUI. --------------------------
-// Returns the final commit message, or ErrCommitAborted if the user quits.
-// countDiffLines counts added and removed lines in a diff.
 func countDiffLines(diff string) int {
 	count := 0
 	for _, line := range strings.Split(diff, "\n") {

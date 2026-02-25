@@ -18,22 +18,15 @@ const (
 )
 
 var (
-	// ErrNotConfigured is returned when the worker is unreachable.
-	ErrNotConfigured = errors.New("AI not configured")
-
-	// ErrGenerationFailed is returned when the API fails to produce a message.
+	ErrNotConfigured    = errors.New("AI not configured")
 	ErrGenerationFailed = errors.New("failed to generate commit message")
-
-	// ErrRateLimited is returned when the shared API key is rate limited.
-	ErrRateLimited = errors.New("rate limit exceeded")
+	ErrRateLimited      = errors.New("rate limit exceeded")
 )
 
-// Generator generates commit messages from git diffs.
 type Generator interface {
 	Generate(ctx context.Context, diff string) (string, error)
 }
 
-// New returns a Generator backed by the Groq API via Cloudflare Worker proxy.
 func New() Generator {
 	return &groqGenerator{url: workerURL}
 }
@@ -59,8 +52,6 @@ type chatResponse struct {
 	} `json:"choices"`
 }
 
-// extractCommitMessage scans the model's raw response for the first line that
-// looks like a conventional commit message, stripping backticks and whitespace.
 func extractCommitMessage(raw string) string {
 	conventionalTypes := []string{"feat", "fix", "docs", "refactor", "test", "chore", "style", "perf", "ci", "build"}
 	for _, line := range strings.Split(raw, "\n") {
@@ -76,7 +67,6 @@ func extractCommitMessage(raw string) string {
 			}
 		}
 	}
-	// Fallback: return first non-empty line
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(strings.Trim(strings.TrimSpace(line), "`"))
 		if line != "" {
@@ -86,9 +76,8 @@ func extractCommitMessage(raw string) string {
 	return ""
 }
 
-// prepareDiff strips unchanged context lines from the diff, keeping only file
-// headers, hunk headers, and added/removed lines. A file summary is prepended
-// so the model always knows what changed even when content is truncated.
+// prepareDiff filters context lines and prepends a file summary.
+// Truncates to maxDiffChars to stay within API limits.
 func prepareDiff(diff string) string {
 	const maxDiffChars = 6000
 
@@ -126,8 +115,6 @@ func prepareDiff(diff string) string {
 	return result
 }
 
-// Generate sends the diff to the Cloudflare Worker proxy and returns a
-// conventional commit message.
 func (g *groqGenerator) Generate(ctx context.Context, diff string) (string, error) {
 	body, err := json.Marshal(chatRequest{
 		Model: model,

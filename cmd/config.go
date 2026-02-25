@@ -43,7 +43,6 @@ Git passthrough (examples):
 	},
 }
 
-// containsAPIKey reports whether api-key is present in args.
 func containsAPIKey(args []string) bool {
 	for _, arg := range args {
 		if arg == "api-key" {
@@ -53,9 +52,7 @@ func containsAPIKey(args []string) bool {
 	return false
 }
 
-// runGCMConfig handles gcm-specific api-key get/set/unset.
 func runGCMConfig(args []string) error {
-	// --unset api-key
 	for i, arg := range args {
 		if arg == "--unset" {
 			if i+1 < len(args) && args[i+1] == "api-key" {
@@ -69,19 +66,15 @@ func runGCMConfig(args []string) error {
 		}
 	}
 
-	// api-key <value>  →  set
-	// api-key          →  get
 	for i, arg := range args {
 		if arg == "api-key" {
 			if i+1 < len(args) {
-				// set
 				if err := config.SetAPIKey(args[i+1]); err != nil {
 					fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 					return err
 				}
 				fmt.Println("API key saved.")
 			} else {
-				// get
 				val, err := config.GetAPIKey()
 				if errors.Is(err, config.ErrNotSet) {
 					return fmt.Errorf("api-key is not set")
@@ -98,7 +91,6 @@ func runGCMConfig(args []string) error {
 	return nil
 }
 
-// passthroughGitConfig shells directly to git config with the provided args.
 func passthroughGitConfig(args []string) error {
 	c := exec.Command("git", append([]string{"config"}, args...)...)
 	c.Stdin = os.Stdin
