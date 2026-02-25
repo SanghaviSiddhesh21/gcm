@@ -58,7 +58,7 @@ type spinnerTickMsg struct{}
 var (
 	styleCommitHeader  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))  // cyan
 	styleCommitMessage = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("2"))  // green
-	styleCommitWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))             // yellow
+	styleCommitWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Faint(true)  // muted yellow
 	styleCommitError   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))             // red
 	styleCommitMeta    = lipgloss.NewStyle().Faint(true)
 	styleCommitPrompt  = lipgloss.NewStyle().Bold(true)
