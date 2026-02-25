@@ -8,6 +8,7 @@ gcm
 # Build directories
 dist/
 build/
+docs/
 
 # IDE
 .vscode/

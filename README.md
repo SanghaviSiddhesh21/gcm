@@ -27,7 +27,7 @@ Download the latest binary for your platform from [GitHub Releases](https://gith
 
 ### Build from Source
 
-Requires Go 1.21+.
+Requires Go 1.24+.
 
 ```bash
 git clone https://github.com/SanghaviSiddhesh21/gcm.git
@@ -56,8 +56,8 @@ gcm assign old-experiment archived
 # 4. View all branches organized by category
 gcm view
 
-# 5. View a specific category
-gcm view feature
+# 5. Commit with an AI-generated message
+gcm commit -g
 ```
 
 **Example output of `gcm view`:**
@@ -88,6 +88,12 @@ The `●` marker indicates your currently checked out branch.
 | `gcm view [category]` | View all branches organized by category, or filter to one |
 | `gcm categories` | List all category names |
 | `gcm delete <category>` | Delete a category — branches move to Uncategorized |
+| `gcm commit` | Create a commit — passthrough to `git commit` |
+| `gcm commit -g` | Create a commit with an AI-generated message |
+| `gcm config` | Get and set configuration — passthrough to `git config` |
+| `gcm config api-key <value>` | Save your Groq API key |
+| `gcm config api-key` | Print your saved Groq API key |
+| `gcm config --unset api-key` | Remove your saved Groq API key |
 
 ### `gcm init`
 
@@ -99,7 +105,7 @@ gcm init
 
 ### `gcm create <category>`
 
-Category names must be alphanumeric and may contain `-` or `_`. Max 64 characters.
+Category names must be alphanumeric and may contain `-`. Max 64 characters.
 
 ```bash
 gcm create feature
@@ -140,6 +146,76 @@ Deletes a category. Branches in that category are moved back to `Uncategorized`.
 ```bash
 gcm delete archived
 ```
+
+### `gcm commit`
+
+Passthrough to `git commit`. All flags are forwarded directly.
+
+```bash
+gcm commit -m "my message"
+gcm commit --amend
+```
+
+### `gcm commit -g`
+
+Generates a commit message from your staged diff using AI and opens an interactive TUI to review it.
+
+```
+⠙ Generating commit message...
+
+> Staged files (3)   ▼
+  Unstaged files (1) ▼
+
+Generated message:
+feat(cmd): add commit and config subcommands
+
+Accept? (y/e/r/q):
+```
+
+| Key | Action |
+|---|---|
+| `y` | Accept and commit |
+| `e` | Edit in `$EDITOR` |
+| `r` | Regenerate |
+| `q` | Quit without committing |
+
+Works out of the box using a shared API key. For higher rate limits, set your own Groq API key — see [AI Setup](#ai-setup) below.
+
+### `gcm config`
+
+Passthrough to `git config`. All flags are forwarded directly.
+
+```bash
+gcm config user.name "John"
+gcm config --global user.email "john@example.com"
+gcm config --list
+```
+
+Intercepts `api-key` to manage the GCM-specific config stored in `~/.gcm/config.json`.
+
+```bash
+gcm config api-key <your-key>   # save key
+gcm config api-key              # print saved key
+gcm config --unset api-key      # remove key
+```
+
+---
+
+## AI Setup
+
+`gcm commit -g` works out of the box with a shared API key. If you hit rate limits, set your own Groq API key for unlimited use.
+
+**Get a free Groq API key:**
+
+1. Sign up at [console.groq.com](https://console.groq.com)
+2. Go to **API Keys** → **Create API Key**
+3. Copy the key and run:
+
+```bash
+gcm config api-key <your-groq-api-key>
+```
+
+Your key is stored in `~/.gcm/config.json` and never tracked by git.
 
 ---
 

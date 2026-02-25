@@ -13,6 +13,8 @@ Cobra command definitions. One file per subcommand plus `root.go` for the root c
 | `view.go` | `gcm view [category]` | The most complex command. Gathers branches, sync status, commit times, sorts everything, then delegates to TUI or static renderer. |
 | `delete.go` | `gcm delete <category>` | Removes category, reports how many branches were moved to Uncategorized. |
 | `categories.go` | `gcm categories` | Lists category names. |
+| `commit.go` | `gcm commit` | Passthrough to `git commit`. `-g` flag triggers AI commit TUI (requires a terminal). |
+| `config.go` | `gcm config` | Passthrough to `git config`. Intercepts `api-key` args for GCM-managed config in `~/.gcm/config.json`. |
 
 ## View sorting logic (`view.go`)
 
@@ -33,7 +35,12 @@ Every command follows the same structure:
 
 Error handling: errors are both printed to stderr and returned. Cobra's `SilenceUsage` and `SilenceErrors` are set on the root command, so error display is handled by `main.go`.
 
+## Passthrough pattern
+
+`commit.go` and `config.go` use `DisableFlagParsing: true` and inspect `args` manually. Both commands intercept a specific arg (`-g` for commit, `api-key` for config) and delegate everything else verbatim to the underlying `git` command via `exec.Command`, forwarding stdin/stdout/stderr. This mirrors how `git` itself handles subcommand extensions.
+
 ## Gotchas
 
 - The `version` variable in `root.go` defaults to `"dev"` and is overwritten by goreleaser at build time.
 - `view.go` imports `mattn/go-isatty` directly rather than through the `ui` package to decide between TUI and static output.
+- `commit.go` rejects `-g` when combined with other flags and requires a terminal (`isatty` check) — the commit TUI cannot run in a pipe.

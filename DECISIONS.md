@@ -52,9 +52,27 @@ Category names must match `^[a-zA-Z0-9-]+$`, max 64 characters. Underscores are 
 
 The tool is entirely synchronous and single-threaded. The Bubbletea TUI uses its own event loop but all git operations and store mutations are sequential. There is no shared state, no goroutine pools, no channels beyond what Bubbletea uses internally.
 
+## AI via Cloudflare Worker proxy, not direct Groq API
+
+`gcm commit -g` sends diffs to a Cloudflare Worker rather than calling the Groq API directly. This lets the tool work out-of-the-box without requiring users to supply a Groq key — the Worker uses a shared gcm key with KV-backed rate limiting (3 req/min, 20 req/day per IP). Users who hit rate limits can supply their own key via `gcm config api-key`.
+
+## `~/.gcm/config.json` for user config, no env vars
+
+The API key is stored in `~/.gcm/config.json` (file mode 0600, directory mode 0700) and managed exclusively via `gcm config api-key`. Env var support was explicitly dropped to keep the config path single and consistent. The file lives outside the repo and needs no `.gitignore` entry.
+
+## Rate limiting in Cloudflare Worker with user key bypass
+
+The Worker enforces per-IP rate limits via Cloudflare KV when using the shared gcm key. If the request includes a valid `X-User-Api-Key` header, that key is used directly and no rate limiting applies. The Worker returns HTTP 429 on limit exceeded; the TUI handles this by skipping retries entirely and falling to manual input with a message directing the user to set their own key.
+
 ## Lefthook for pre-push hooks
 
 The project uses Lefthook (not Husky or pre-commit) for git hooks. The pre-push pipeline runs fmt → build → test → coverage → lint in sequence. (inferred) Lefthook was likely chosen for its Go-native ecosystem fit and simple YAML configuration.
+
+## Inline `//nolint` over global exclusions for lint suppressions
+
+When suppressing a lint warning, prefer an inline `//nolint:linter` comment at the specific line over adding a global exclusion to `.golangci.yml`. This keeps the suppression scoped to exactly the line where it is intentional and documents the reason inline, rather than silencing the rule everywhere in the codebase where it might catch legitimate issues.
+
+Global exclusions in `.golangci.yml` are reserved for rules that are intentionally inapplicable to the entire project (e.g. G204 subprocess variable — expected in a git wrapper, G117 secret field pattern — expected in config storage).
 
 ## golangci-lint exclusions
 

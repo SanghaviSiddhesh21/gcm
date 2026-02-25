@@ -13,7 +13,9 @@ A CLI tool that organizes local git branches into user-defined categories. Metad
 | `cmd/` | Cobra command definitions (one file per subcommand) and view sorting logic |
 | `internal/git/` | All interactions with the `git` binary — branch listing, sync status, checkout, worktree status |
 | `internal/store/` | JSON persistence layer — load/save/validate the `.git/gcm.json` store |
-| `internal/ui/` | Terminal output — static tree rendering (`ui.go`) and interactive TUI (`tui.go`) |
+| `internal/ui/` | Terminal output — static tree rendering (`ui.go`), view TUI (`tui_view.go`), and commit TUI (`tui_commit.go`) |
+| `internal/ai/` | AI commit message generation — sends staged diff to Cloudflare Worker proxy, returns conventional commit message |
+| `internal/config/` | User config persistence — reads and writes `~/.gcm/config.json` (API key storage) |
 
 ## Key Dependencies
 
@@ -44,6 +46,8 @@ Version is injected at build time via `-ldflags -X github.com/siddhesh/gcm/cmd.v
 - [internal/git/CONTEXT.md](internal/git/CONTEXT.md) — git interaction layer
 - [internal/store/CONTEXT.md](internal/store/CONTEXT.md) — JSON persistence layer
 - [internal/ui/CONTEXT.md](internal/ui/CONTEXT.md) — terminal rendering (static + TUI)
+- [internal/ai/CONTEXT.md](internal/ai/CONTEXT.md) — AI generation layer
+- [internal/config/CONTEXT.md](internal/config/CONTEXT.md) — user config (API key storage)
 - [cmd/CONTEXT.md](cmd/CONTEXT.md) — CLI commands and view sorting
 
 ## Working with this codebase

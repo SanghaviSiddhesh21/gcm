@@ -8,8 +8,10 @@ Thin wrapper around the `git` CLI binary. All git operations in the project go t
 - **Branch operations** — `ListBranches`, `CurrentBranch`, `BranchExists` query local branch state. `ListRemoteBranches` returns `origin/*` branches with the prefix stripped.
 - **SyncStatus** — Computes ahead/behind counts for a branch against its `origin/` counterpart using `rev-list --count`.
 - **BranchCommitTimes** — Returns a map of branch → most recent commit timestamp, taking the max of local and remote ref times. Uses a single `for-each-ref` call for efficiency.
-- **WorktreeStatus** — Parses `git status --porcelain=v1` into staged/unstaged/untracked file lists. Used by the TUI to warn before checkout on dirty worktrees.
+- **WorktreeStatus** — Parses `git status --porcelain=v1` into staged/unstaged/untracked file lists. Used by the view TUI (dirty-worktree confirmation) and the commit TUI (file list display).
+- **GetStagedChanges** — Returns `git diff --cached` output. Used by `cmd/commit.go` to obtain the diff for AI generation. Returns empty string if nothing is staged.
 - **Checkout** — Switches the working tree to a given branch.
+- **Commit** — Creates a commit with `git commit -m <message>`.
 
 ## Internal
 
@@ -33,3 +35,5 @@ Tests create real temporary git repositories (with commits and remotes) using `s
 - Commit time retrieval (local-only, remote-newer, local-newer, in-sync)
 - Worktree status (clean, untracked, staged, unstaged modifications)
 - Checkout (success, back-and-forth, nonexistent branch, idempotent)
+- Staged changes (clean worktree returns empty string, with staged file returns diff)
+- Commit (creates commit with correct message)

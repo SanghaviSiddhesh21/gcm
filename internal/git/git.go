@@ -234,6 +234,25 @@ func Checkout(gitDir, branch string) error {
 	return nil
 }
 
+// GetStagedChanges returns the unified diff of all staged changes via
+// `git diff --cached`. Returns an empty string if nothing is staged.
+func GetStagedChanges(gitDir string) (string, error) {
+	diff, err := runGit(workDir(gitDir), "diff", "--cached")
+	if err != nil {
+		return "", fmt.Errorf("git diff --cached: %w", err)
+	}
+	return diff, nil
+}
+
+// Commit creates a commit with the given message using all currently staged changes.
+func Commit(gitDir, message string) error {
+	_, err := runGit(workDir(gitDir), "commit", "-m", message)
+	if err != nil {
+		return fmt.Errorf("git commit: %w", err)
+	}
+	return nil
+}
+
 func runGit(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir

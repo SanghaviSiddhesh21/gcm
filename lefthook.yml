@@ -1,5 +1,5 @@
 pre-push:
-  parallel: false  # fmt → build → lint → test → coverage must run in order
+  parallel: false  # fmt → build → test → coverage-check → lint must run in order
   commands:
     fmt:
       glob: "**/*.go"
@@ -9,10 +9,10 @@ pre-push:
       run: go build ./...
     test:
       glob: "**/*.go"
-      run: go test -coverprofile=coverage.out ./internal/git ./internal/store
-    coverage:
+      run: make test
+    coverage-check:
       glob: "**/*.go"
-      run: "go tool cover -html=coverage.out -o coverage.html && echo '✓ Coverage report generated: coverage.html'"
+      run: make coverage-check
     lint:
       glob: "**/*.go"
       run: golangci-lint run ./...
