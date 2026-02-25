@@ -294,35 +294,43 @@ func (m commitModel) View() string {
 		sb.WriteString(styleCommitMeta.Render(fmt.Sprintf("%s Generating commit message...\n", frame)))
 
 	case modeReview:
-		stagedArrow := "▼"
+		stagedArrow := "▶ "
 		if m.stagedOpen {
-			stagedArrow = "▲"
+			stagedArrow = "▼ "
 		}
-		stagedHeader := fmt.Sprintf("Staged files (%d)   %s", len(m.status.Staged), stagedArrow)
+		stagedHeader := fmt.Sprintf("Staged files (%d)", len(m.status.Staged))
 		if m.cursorRow == 0 {
-			sb.WriteString(styleCommitHeader.Render("> "+stagedHeader) + "\n")
+			sb.WriteString("- " + styleSelected.Render(stagedArrow+stagedHeader) + "\n")
 		} else {
-			sb.WriteString(styleCommitMeta.Render("  "+stagedHeader) + "\n")
+			sb.WriteString("- " + styleCommitHeader.Render(stagedArrow+stagedHeader) + "\n")
 		}
 		if m.stagedOpen {
-			for _, f := range m.status.Staged {
-				sb.WriteString(styleCommitFile.Render("    "+f) + "\n")
+			for i, f := range m.status.Staged {
+				prefix := "  ├── "
+				if i == len(m.status.Staged)-1 {
+					prefix = "  └── "
+				}
+				sb.WriteString(styleCommitFile.Render(prefix+f) + "\n")
 			}
 		}
 
-		unstagedArrow := "▼"
+		unstagedArrow := "▶ "
 		if m.unstagedOpen {
-			unstagedArrow = "▲"
+			unstagedArrow = "▼ "
 		}
-		unstagedHeader := fmt.Sprintf("Unstaged files (%d) %s", len(m.status.Unstaged), unstagedArrow)
+		unstagedHeader := fmt.Sprintf("Unstaged files (%d)", len(m.status.Unstaged))
 		if m.cursorRow == 1 {
-			sb.WriteString(styleCommitHeader.Render("> "+unstagedHeader) + "\n")
+			sb.WriteString("- " + styleSelected.Render(unstagedArrow+unstagedHeader) + "\n")
 		} else {
-			sb.WriteString(styleCommitMeta.Render("  "+unstagedHeader) + "\n")
+			sb.WriteString("- " + styleCommitHeader.Render(unstagedArrow+unstagedHeader) + "\n")
 		}
 		if m.unstagedOpen {
-			for _, f := range m.status.Unstaged {
-				sb.WriteString(styleCommitFile.Render("    "+f) + "\n")
+			for i, f := range m.status.Unstaged {
+				prefix := "  ├── "
+				if i == len(m.status.Unstaged)-1 {
+					prefix = "  └── "
+				}
+				sb.WriteString(styleCommitFile.Render(prefix+f) + "\n")
 			}
 		}
 
@@ -337,7 +345,7 @@ func (m commitModel) View() string {
 		sb.WriteString(styleCommitPrompt.Render("Accept? (y/e/r/q): "))
 
 		sb.WriteString("\n\n")
-		sb.WriteString(styleCommitMeta.Render("↑/↓ navigate dropdowns  space/enter expand  y accept  e edit  r regenerate  q quit"))
+		sb.WriteString(styleCommitMeta.Render("↑/↓ navigate  space/enter expand  y accept  e edit  r regenerate  q quit"))
 
 	case modeManualInput:
 		switch m.manualReason {
