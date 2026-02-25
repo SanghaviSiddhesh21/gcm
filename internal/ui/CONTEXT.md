@@ -9,7 +9,7 @@ Terminal rendering layer with two output modes: a static colored tree and an int
 - **PrintSuccess / PrintWarning / PrintError** — One-line colored messages.
 - **renderBranchTag** — Parses `[Local]` / `[Remote]` tags and applies distinct colors to the label and status portions.
 
-## Interactive TUI (`tui.go`)
+## View TUI (`tui_view.go`)
 
 A Bubbletea program that renders the same tree as the static renderer but adds:
 - Keyboard navigation (up/down to move, enter to checkout, space/right to collapse/expand categories)
@@ -19,13 +19,31 @@ A Bubbletea program that renders the same tree as the static renderer but adds:
 
 The TUI depends on `internal/git` for checkout and worktree status checks. All git operations are dispatched as async Bubbletea commands.
 
+## Commit TUI (`tui_commit.go`)
+
+A separate Bubbletea program for the `gcm commit -g` flow. Three modes:
+- `modeGenerating` — spinner while AI generates; retries up to 3× on transient errors; skips retries entirely on `ErrRateLimited`
+- `modeReview` — displays generated message with y/e/r/q keybinds; shows large-diff warning when staged diff exceeds 500 changed lines
+- `modeManualInput` — inline text entry when AI is unavailable (not configured, rate limited, or generation failed after retries)
+
+Entry point: `RunCommitTUI(branch, diff, status, gen) (string, error)`. Returns `ErrCommitAborted` if the user quits without accepting.
+
+`countDiffLines(diff)` counts only `+`/`-` lines, excluding `+++`/`---` file headers and `@@` hunk headers. Used to trigger the large-diff warning.
+
 ## Exposed to `cmd`
 
 - `RunTUI` — Entry point for the interactive view. Returns the name of the checked-out branch (empty string if none).
+- `RunCommitTUI` — Entry point for the commit flow. Returns the accepted commit message.
+- `ErrCommitAborted` — returned when the user quits the commit TUI without accepting.
 - `PrintTree`, `PrintCategoryList`, `PrintSuccess`, `PrintWarning`, `PrintError` — Static output functions.
+
+## Testing
+
+`tui_commit_test.go` — 6 tests for `countDiffLines`:
+- empty diff, context-only lines (not counted), added/removed lines counted, `+++`/`---` file headers excluded, `@@` hunk headers excluded, large diff above threshold
 
 ## Gotchas
 
-- The TUI and static renderer have parallel but separate tag-rendering logic (`renderBranchTag` in `ui.go` vs `renderTagLipgloss` in `tui.go`). Changes to tag formatting must be made in both places.
-- The TUI's `buildItems` flattens the category/branch tree into a single navigable list. Collapsing a category removes its branch items from this list, which can shift the cursor.
-- Color definitions exist in two parallel sets: `fatih/color` vars in `ui.go` and `lipgloss` styles in `tui.go`. These should stay visually consistent.
+- The view TUI and static renderer have parallel but separate tag-rendering logic (`renderBranchTag` in `ui.go` vs `renderTagLipgloss` in `tui_view.go`). Changes to tag formatting must be made in both places.
+- The view TUI's `buildItems` flattens the category/branch tree into a single navigable list. Collapsing a category removes its branch items from this list, which can shift the cursor.
+- Color definitions exist in two parallel sets: `fatih/color` vars in `ui.go` and `lipgloss` styles in `tui_view.go` and `tui_commit.go`. These should stay visually consistent.
