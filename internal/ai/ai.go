@@ -125,7 +125,7 @@ func (g *groqGenerator) Generate(ctx context.Context, diff string) (string, erro
 			},
 			{
 				Role:    "user",
-				Content: fmt.Sprintf("Write a conventional commit message for this diff. Format: <type>(<optional scope>): <description>. Output the commit message only.\n\n%s", prepareDiff(diff)),
+				Content: fmt.Sprintf("Write a conventional commit message for this diff. Format: <type>(<optional scope>): <description>. Output the commit message only.\n\nValid types: feat, fix, docs, chore, refactor, test, ci.\n\n%s", prepareDiff(diff)),
 			},
 		},
 		MaxTokens: 60,

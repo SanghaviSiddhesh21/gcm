@@ -384,7 +384,7 @@ func RunCommitTUI(_ string, diff string, status git.WorktreeStatus, gen ai.Gener
 		mode:      modeGenerating,
 	}
 
-	p := tea.NewProgram(m)
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	finalModel, err := p.Run()
 	if err != nil {
 		return "", err
