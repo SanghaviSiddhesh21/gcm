@@ -17,6 +17,7 @@ linters:
       excludes:
         - G204  # subprocess launched with variable — expected in a git wrapper CLI
         - G304  # file path from variable — path is always .git/gcm.json, not user input
+        - G117  # exported struct field matches secret pattern — APIKey in config.file is intentionally a secret field
     revive:
       rules:
         - name: exported

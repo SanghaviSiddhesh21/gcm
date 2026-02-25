@@ -20,7 +20,7 @@ var ErrCommitAborted = errors.New("commit aborted")
 type commitMode int
 
 const (
-	modeGenerating  commitMode = iota
+	modeGenerating commitMode = iota
 	modeReview
 	modeManualInput
 )
@@ -28,7 +28,7 @@ const (
 type manualInputReason int
 
 const (
-	reasonModelNotFound    manualInputReason = iota
+	reasonModelNotFound manualInputReason = iota
 	reasonGenerationFailed
 	reasonRateLimited
 )
@@ -51,7 +51,7 @@ type spinnerTickMsg struct{}
 var (
 	styleCommitHeader  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))  // cyan
 	styleCommitMessage = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("2"))  // green
-	styleCommitWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Faint(true)  // muted yellow
+	styleCommitWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Faint(true) // muted yellow
 	styleCommitError   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))             // red
 	styleCommitMeta    = lipgloss.NewStyle().Faint(true)
 	styleCommitPrompt  = lipgloss.NewStyle().Bold(true)
@@ -260,10 +260,10 @@ func (m commitModel) openEditor() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if _, err := tmpFile.WriteString(m.message); err != nil {
-		tmpFile.Close()
+		tmpFile.Close() //nolint:errcheck,gosec
 		return m, nil
 	}
-	tmpFile.Close()
+	tmpFile.Close() //nolint:errcheck,gosec
 
 	name := tmpFile.Name()
 	editor := os.Getenv("EDITOR")
@@ -271,8 +271,8 @@ func (m commitModel) openEditor() (tea.Model, tea.Cmd) {
 		editor = "vi"
 	}
 
-	return m, tea.ExecProcess(exec.Command(editor, name), func(err error) tea.Msg {
-		defer os.Remove(name)
+	return m, tea.ExecProcess(exec.Command(editor, name), func(err error) tea.Msg { //nolint:gosec // editor is from $EDITOR env var — launching user's chosen editor is by design
+		defer os.Remove(name) //nolint:errcheck
 		if err != nil {
 			return editorDoneMsg{err: err}
 		}
@@ -306,7 +306,7 @@ func (m commitModel) View() string {
 		}
 		if m.stagedOpen {
 			for _, f := range m.status.Staged {
-				sb.WriteString(styleCommitFile.Render("    " + f) + "\n")
+				sb.WriteString(styleCommitFile.Render("    "+f) + "\n")
 			}
 		}
 
@@ -322,7 +322,7 @@ func (m commitModel) View() string {
 		}
 		if m.unstagedOpen {
 			for _, f := range m.status.Unstaged {
-				sb.WriteString(styleCommitFile.Render("    " + f) + "\n")
+				sb.WriteString(styleCommitFile.Render("    "+f) + "\n")
 			}
 		}
 

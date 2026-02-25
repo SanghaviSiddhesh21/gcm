@@ -68,6 +68,12 @@ The Worker enforces per-IP rate limits via Cloudflare KV when using the shared g
 
 The project uses Lefthook (not Husky or pre-commit) for git hooks. The pre-push pipeline runs fmt → build → test → coverage → lint in sequence. (inferred) Lefthook was likely chosen for its Go-native ecosystem fit and simple YAML configuration.
 
+## Inline `//nolint` over global exclusions for lint suppressions
+
+When suppressing a lint warning, prefer an inline `//nolint:linter` comment at the specific line over adding a global exclusion to `.golangci.yml`. This keeps the suppression scoped to exactly the line where it is intentional and documents the reason inline, rather than silencing the rule everywhere in the codebase where it might catch legitimate issues.
+
+Global exclusions in `.golangci.yml` are reserved for rules that are intentionally inapplicable to the entire project (e.g. G204 subprocess variable — expected in a git wrapper, G117 secret field pattern — expected in config storage).
+
 ## golangci-lint exclusions
 
 - `G204` (subprocess with variable): Expected — the tool shells out to git by design.

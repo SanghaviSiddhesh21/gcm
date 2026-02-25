@@ -144,11 +144,11 @@ func (g *groqGenerator) Generate(ctx context.Context, diff string) (string, erro
 		req.Header.Set("X-User-Api-Key", key)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // workerURL is a hardcoded constant, not user input
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", ErrGenerationFailed, err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode == http.StatusTooManyRequests {
 		return "", ErrRateLimited

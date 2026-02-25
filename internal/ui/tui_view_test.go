@@ -6,8 +6,8 @@ import (
 
 func TestRenderTagLipgloss(t *testing.T) {
 	tests := []struct {
-		name    string
-		tag     string
+		name      string
+		tag       string
 		wantEmpty bool
 	}{
 		{
