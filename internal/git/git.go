@@ -9,6 +9,14 @@ import (
 	"time"
 )
 
+// globalGitFlags holds git global flags (e.g. --git-dir=, --work-tree=, -c key=val)
+// set once by main before cmd.Execute(). Not goroutine-safe for writes; written once at startup.
+var globalGitFlags []string
+
+func SetGlobalFlags(flags []string) {
+	globalGitFlags = flags
+}
+
 type RepoInfo struct {
 	WorkDir string
 	GitDir  string
@@ -196,14 +204,12 @@ func (s WorktreeStatus) IsDirty() bool {
 // It runs `git status --porcelain=v1` and parses each line.
 func GetWorktreeStatus(gitDir string) (WorktreeStatus, error) {
 	wd := workDir(gitDir)
-	cmd := exec.Command("git", "status", "--porcelain=v1")
-	cmd.Dir = wd
-	output, err := cmd.CombinedOutput()
+	output, err := runGit(wd, "status", "--porcelain=v1")
 	if err != nil {
 		return WorktreeStatus{}, fmt.Errorf("git status failed: %w", err)
 	}
 	var result WorktreeStatus
-	for _, line := range strings.Split(string(output), "\n") {
+	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimRight(line, "\r\n") // Only trim line endings, not leading spaces
 		if len(line) < 3 {
 			continue
@@ -225,7 +231,6 @@ func GetWorktreeStatus(gitDir string) (WorktreeStatus, error) {
 	return result, nil
 }
 
-// Checkout switches the working tree to the given branch.
 func Checkout(gitDir, branch string) error {
 	_, err := runGit(workDir(gitDir), "checkout", branch)
 	if err != nil {
@@ -244,7 +249,6 @@ func GetStagedChanges(gitDir string) (string, error) {
 	return diff, nil
 }
 
-// Commit creates a commit with the given message using all currently staged changes.
 func Commit(gitDir, message string) error {
 	_, err := runGit(workDir(gitDir), "commit", "-m", message)
 	if err != nil {
@@ -253,12 +257,26 @@ func Commit(gitDir, message string) error {
 	return nil
 }
 
+// GetGitDirAt returns the canonical git directory for the repository at dir.
+// The returned path is absolute when dir is absolute; relative otherwise.
+func GetGitDirAt(dir string) (string, error) {
+	raw, err := runGit(dir, "rev-parse", "--git-dir")
+	if err != nil {
+		return "", err
+	}
+	if filepath.IsAbs(raw) {
+		return raw, nil
+	}
+	return filepath.Join(dir, raw), nil
+}
+
 func runGit(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	allArgs := append(globalGitFlags, args...) //nolint:gocritic // intentional prepend; globalGitFlags is never modified after init
+	cmd := exec.Command("git", allArgs...)
 	cmd.Dir = dir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(output)), nil
+	return strings.TrimRight(string(output), "\r\n"), nil
 }

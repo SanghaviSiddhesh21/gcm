@@ -101,6 +101,43 @@ func TestGetRepoInfo(t *testing.T) {
 	})
 }
 
+// ── TestGetRepoInfoAfterChdir ─────────────────────────────────────────────────
+
+func TestGetRepoInfoAfterChdir(t *testing.T) {
+	repoA := setupTestRepo(t)
+	repoB := setupTestRepo(t)
+
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	defer os.Chdir(orig) //nolint:errcheck
+
+	// Start in repoA.
+	if err := os.Chdir(repoA); err != nil {
+		t.Fatalf("Chdir repoA: %v", err)
+	}
+	infoA, err := GetRepoInfo()
+	if err != nil {
+		t.Fatalf("GetRepoInfo() in repoA: %v", err)
+	}
+
+	// Chdir to repoB — GetRepoInfo must reflect repoB now.
+	if err := os.Chdir(repoB); err != nil {
+		t.Fatalf("Chdir repoB: %v", err)
+	}
+	infoB, err := GetRepoInfo()
+	if err != nil {
+		t.Fatalf("GetRepoInfo() in repoB: %v", err)
+	}
+
+	// WorkDir is returned by --show-toplevel which always returns an absolute path.
+	// GitDir may return a relative ".git", so we only compare WorkDir.
+	if infoA.WorkDir == infoB.WorkDir {
+		t.Errorf("WorkDir unchanged after Chdir: both = %q (should differ per repo)", infoA.WorkDir)
+	}
+}
+
 // ── TestListBranches ──────────────────────────────────────────────────────────
 
 func TestListBranches(t *testing.T) {

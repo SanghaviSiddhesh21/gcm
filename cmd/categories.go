@@ -20,7 +20,7 @@ var categoriesCmd = &cobra.Command{
 			return err
 		}
 
-		s, err := store.Load(repoInfo.GitDir)
+		s, err := store.LoadOrCreate(repoInfo.GitDir)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 			return err

@@ -5,6 +5,8 @@ Thin wrapper around the `git` CLI binary. All git operations in the project go t
 ## Public API
 
 - **RepoInfo** — Holds `WorkDir` (repo root) and `GitDir` (`.git` path). Obtained via `GetRepoInfo()`, which must be called from within a git repository.
+- **GetGitDirAt(dir)** — Returns the canonical git dir for the repo at `dir` (absolute when `dir` is absolute). Used by `gcm init` and `gcm clone` after running the underlying git command.
+- **SetGlobalFlags(flags)** — Stores git global flags (`--git-dir`, `--work-tree`, `-c key=val`) to be prepended to every `runGit` call. Called once at startup by `main.go` alongside `cmd.SetGlobalGitFlags`.
 - **Branch operations** — `ListBranches`, `CurrentBranch`, `BranchExists` query local branch state. `ListRemoteBranches` returns `origin/*` branches with the prefix stripped.
 - **SyncStatus** — Computes ahead/behind counts for a branch against its `origin/` counterpart using `rev-list --count`.
 - **BranchCommitTimes** — Returns a map of branch → most recent commit timestamp, taking the max of local and remote ref times. Uses a single `for-each-ref` call for efficiency.
@@ -15,7 +17,7 @@ Thin wrapper around the `git` CLI binary. All git operations in the project go t
 
 ## Internal
 
-- `runGit` is the single point where `exec.Command("git", ...)` is called. All public functions delegate to it.
+- `runGit` is the single point where `exec.Command("git", ...)` is called. All public functions delegate to it. It prepends `globalGitFlags` to every invocation and trims trailing `\r\n` from output (not `TrimSpace` — leading spaces in `git status --porcelain=v1` output are meaningful).
 - `workDir` resolves the working directory from a gitDir path, handling the special case of relative `.git`.
 
 ## Gotchas

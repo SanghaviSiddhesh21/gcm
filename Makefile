@@ -3,7 +3,9 @@
 # Packages included in coverage measurement.
 # internal/ui is excluded — TUI code requires a real terminal and cannot be coverage-tested.
 # UI tests still run (compile + correctness check) via `go test ./internal/ui/...` in the test target.
-COVERAGE_PKGS = ./internal/git/... ./internal/store/... ./internal/config/... ./internal/ai/...
+# . (root) and ./cmd/... are included: main_test.go and passthrough_internal_test.go run in-process.
+# cmd_test integration tests (init, clone, branch, passthrough) also run but measure via the binary.
+COVERAGE_PKGS = . ./cmd/... ./internal/git/... ./internal/store/... ./internal/config/... ./internal/ai/...
 
 ## help: Show this help message
 help:
@@ -17,16 +19,9 @@ test:
 		&& echo "" \
 		&& go tool cover -func=coverage.out | tail -1
 
-## coverage-check: Fail if coverage is below 80%
+## coverage-check: Fail if coverage drops below threshold defined in .testcoverage.yml
 coverage-check:
-	@go tool cover -func=coverage.out | grep ^total | awk '{ \
-		gsub(/%/, "", $$3); \
-		if ($$3+0 < 80) { \
-			print "Coverage " $$3 "% is below the 80% threshold"; exit 1 \
-		} else { \
-			print "Coverage " $$3 "% meets the 80% threshold" \
-		} \
-	}'
+	@$(shell go env GOPATH)/bin/go-test-coverage --config=.testcoverage.yml
 
 ## test-verbose: Run all tests with verbose output
 test-verbose:

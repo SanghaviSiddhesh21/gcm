@@ -20,6 +20,30 @@ The `store` package defines sentinel errors (`ErrNotInitialized`, `ErrCategoryNo
 
 Branches not present in the `assignments` map are implicitly Uncategorized. The Uncategorized category is always present, marked as immutable, and cannot be deleted or created by the user. This avoids requiring every branch to have an explicit assignment.
 
+## gcm is a drop-in replacement for git (passthrough architecture)
+
+`gcm` acts as a full `git` wrapper. Any command not natively defined in gcm is forwarded verbatim to `git` via `passthroughGit`, which wires `stdin`/`stdout`/`stderr` directly so interactive flows (pagers, prompts, editors) work correctly. This is implemented by setting `DisableFlagParsing: true` and `Args: cobra.ArbitraryArgs` on `rootCmd`, intercepting `--version`/`-v` and `--help`/`-h` explicitly, and forwarding everything else.
+
+## Security denylist for `-c` config injection
+
+When forwarding to git, `gcm` rejects `-c key=val` pairs where the key could cause git to execute an arbitrary binary (e.g. `core.hookspath`, `core.editor`, `diff.external`, `filter.*.clean`). The denylist is applied at both the `main.go` global-flag parse stage and inside `checkPassthroughArgs`. Keys that are legitimate in CI/agent automation (`core.sshCommand`, `credential.helper`) are deliberately not denied. `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n`/`GIT_CONFIG_VALUE_n` env vars (which bypass `-c` checking entirely) are stripped from the subprocess environment.
+
+## Global git flags threaded through both `cmd` and `internal/git`
+
+Git global flags (`-C`, `--git-dir`, `--work-tree`, `-c`) are stripped from `os.Args` in `main.go` before Cobra dispatch. They are distributed to two places: `cmd.SetGlobalGitFlags` (for passthrough subprocesses) and `git.SetGlobalFlags` (for internal `runGit` calls). This ensures flags like `--git-dir=/custom/.git` are honoured both for passthrough commands and for gcm's own git queries.
+
+## `store.LoadOrCreate` instead of requiring explicit `gcm init`
+
+`store.LoadOrCreate` creates a fresh store if none exists, instead of returning `ErrNotInitialized`. All commands (view, assign, create, delete, etc.) use `LoadOrCreate`, so gcm works out-of-the-box in any existing git repo without requiring `gcm init`. `gcm init` still exists but now runs `git init` first, making it useful for new repos.
+
+## `gcm branch` syncs the assignment map on rename and delete
+
+`gcm branch -m old new` updates the branch assignment in `gcm.json` after the git rename succeeds. `gcm branch -d branch` removes the assignment after the git delete succeeds. Failures in store sync do not fail the overall command — the git operation already succeeded and is not reversible.
+
+## Passthrough uses `c.Run()` without `Setpgid`
+
+On Unix, `passthroughGit` uses a plain `c.Run()` with no `Setpgid` or manual signal forwarding. An earlier implementation used `Setpgid: true` to isolate git in its own process group and forwarded signals via a goroutine. This was removed because `Setpgid` places git outside the terminal's foreground process group, causing git's pager (`less`) and any editor children to receive `SIGTTIN` and stop when they try to read from the TTY — freezing `gcm log`, `gcm diff`, `gcm branch`, and `gcm rebase -i`. Without `Setpgid`, git and its children stay in the terminal's foreground process group, Ctrl+C is delivered by the kernel to the entire group automatically, and pagers and editors work correctly.
+
 ## Shell out to `git` binary, no libgit2 bindings
 
 All git operations exec the `git` CLI. This avoids CGo, simplifies cross-compilation (goreleaser builds for 6 targets), and guarantees compatibility with the user's installed git version. The `gosec` G204 exclusion in `.golangci.yml` acknowledges this choice.

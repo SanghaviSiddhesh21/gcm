@@ -18,13 +18,14 @@ const (
 )
 
 var (
-	ErrNotInitialized     = errors.New("gcm not initialized: run 'gcm init' first")
-	ErrAlreadyInitialized = errors.New("gcm already initialized in this repository")
-	ErrInvalidName        = errors.New("invalid category name")
-	ErrCategoryExists     = errors.New("category already exists")
-	ErrCategoryNotFound   = errors.New("category not found")
-	ErrImmutableCategory  = errors.New("cannot modify immutable category 'Uncategorized'")
+	ErrNotInitialized    = errors.New("gcm not initialized: run 'gcm init' first")
+	ErrInvalidName       = errors.New("invalid category name")
+	ErrCategoryExists    = errors.New("category already exists")
+	ErrCategoryNotFound  = errors.New("category not found")
+	ErrImmutableCategory = errors.New("cannot modify immutable category 'Uncategorized'")
 )
+
+var categoryNameRe = regexp.MustCompile(`^[a-zA-Z0-9-]+$`)
 
 type Category struct {
 	Name      string `json:"name"`
@@ -105,7 +106,7 @@ func ValidateCategoryName(name string) error {
 		return ErrInvalidName
 	}
 
-	if !regexp.MustCompile(`^[a-zA-Z0-9-]+$`).MatchString(name) {
+	if !categoryNameRe.MatchString(name) {
 		return ErrInvalidName
 	}
 
@@ -204,4 +205,44 @@ func (s *Store) RemoveCategory(name string) error {
 	}
 
 	return nil
+}
+
+// UnassignBranch removes a branch's category assignment.
+// No-op if the branch has no assignment.
+func (s *Store) UnassignBranch(branch string) {
+	delete(s.Assignments, branch)
+}
+
+// RenameBranch updates the assignment key from old to new.
+// No-op if old has no assignment.
+func (s *Store) RenameBranch(old, new string) {
+	if cat, ok := s.Assignments[old]; ok {
+		delete(s.Assignments, old)
+		s.Assignments[new] = cat
+	}
+}
+
+// LoadOrCreate loads the store if it exists, or creates and saves a new one.
+// Returns an error if gitDir is empty or does not exist as a directory.
+func LoadOrCreate(gitDir string) (*Store, error) {
+	if gitDir == "" {
+		return nil, fmt.Errorf("gitDir is empty: not in a git repository")
+	}
+	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
+		return nil, fmt.Errorf("git directory not found: %s", gitDir)
+	}
+
+	s, err := Load(gitDir)
+	if err == nil {
+		return s, nil
+	}
+	if !errors.Is(err, ErrNotInitialized) {
+		return nil, err
+	}
+
+	s = NewStore()
+	if err := Save(gitDir, s); err != nil {
+		return nil, err
+	}
+	return s, nil
 }

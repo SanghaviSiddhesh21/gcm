@@ -30,13 +30,11 @@ func cprint(c *color.Color, msg string)          { _, _ = c.Print(msg) }
 func cprintf(c *color.Color, f string, a ...any) { _, _ = c.Printf(f, a...) }
 func cprintln(c *color.Color, msg string)        { _, _ = c.Println(msg) }
 
-// renderBranchTag prints a branch tag with separate colors for label and status.
 func renderBranchTag(tag string) {
 	if tag == "" {
 		return
 	}
 
-	// Parse label and status
 	var label, status string
 	if len(tag) > 7 && tag[:7] == "[Local]" {
 		label = "[Local]"
@@ -50,14 +48,12 @@ func renderBranchTag(tag string) {
 		return
 	}
 
-	// Render label
 	if label == "[Local]" {
 		cprint(colorMeta, label)
 	} else {
 		cprint(colorRemoteLabel, label)
 	}
 
-	// Render status with appropriate color
 	if status == "" {
 		return
 	}

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 
 	"github.com/siddhesh/gcm/internal/config"
 	"github.com/spf13/cobra"
@@ -29,10 +28,8 @@ Git passthrough (examples):
   gcm config --list`,
 	DisableFlagParsing: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		for _, arg := range args {
-			if arg == "--help" || arg == "-h" {
-				return cmd.Help()
-			}
+		if checkHelp(args) {
+			return cmd.Help()
 		}
 
 		if containsAPIKey(args) {
@@ -92,11 +89,7 @@ func runGCMConfig(args []string) error {
 }
 
 func passthroughGitConfig(args []string) error {
-	c := exec.Command("git", append([]string{"config"}, args...)...)
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	return c.Run()
+	return passthroughGit(globalGitFlags, append([]string{"config"}, args...))
 }
 
 func init() {
