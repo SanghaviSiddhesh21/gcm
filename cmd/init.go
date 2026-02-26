@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"os"
+	"strings"
 
 	"github.com/siddhesh/gcm/internal/git"
 	"github.com/siddhesh/gcm/internal/store"
@@ -10,27 +10,57 @@ import (
 )
 
 var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialize GCM in the current repository",
+	Use:   "init [directory]",
+	Short: "Initialize a git repository and set up GCM",
+	Long: `Initialize a git repository and set up GCM.
+
+Runs 'git init [args...]' then initializes the GCM store.
+All arguments are forwarded verbatim to git init.`,
+	DisableFlagParsing: true,
+	Args:               cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		repoInfo, err := git.GetRepoInfo()
+		if checkHelp(args) {
+			return cmd.Help()
+		}
+
+		if err := passthroughGit(globalGitFlags, append([]string{"init"}, args...)); err != nil {
+			return err
+		}
+
+		// Determine target directory from positional args.
+		// Known init flags that consume the next token as a value.
+		knownInitValueFlags := map[string]bool{
+			"--template": true, "--separate-git-dir": true,
+			"-b": true, "--initial-branch": true,
+		}
+		targetDir := "."
+		skipNext := false
+		for _, arg := range args {
+			if skipNext {
+				skipNext = false
+				continue
+			}
+			if knownInitValueFlags[arg] {
+				skipNext = true
+				continue
+			}
+			if !strings.HasPrefix(arg, "-") {
+				targetDir = arg
+				break
+			}
+		}
+
+		// Locate the git dir in the target directory.
+		gitDir, err := git.GetGitDirAt(targetDir)
 		if err != nil {
-			return err
+			return fmt.Errorf("gcm init: could not locate git dir: %w", err)
 		}
 
-		storePath := store.StorePath(repoInfo.GitDir)
-		if _, err := os.Stat(storePath); err == nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", store.ErrAlreadyInitialized.Error())
-			return store.ErrAlreadyInitialized
+		// Create the store if not already present.
+		if _, err := store.LoadOrCreate(gitDir); err != nil {
+			return fmt.Errorf("gcm init: failed to initialize store: %w", err)
 		}
 
-		s := store.NewStore()
-
-		if err := store.Save(repoInfo.GitDir, s); err != nil {
-			return err
-		}
-
-		fmt.Printf("Initialized GCM in %s\n", repoInfo.WorkDir)
 		return nil
 	},
 }

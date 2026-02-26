@@ -9,8 +9,8 @@ A CLI tool that organizes local git branches into user-defined categories. Metad
 
 | Path | Responsibility |
 |---|---|
-| `main.go` | Entry point — delegates to `cmd.Execute()` |
-| `cmd/` | Cobra command definitions (one file per subcommand) and view sorting logic |
+| `main.go` | Entry point — strips global git flags (`-C`, `--git-dir`, `--work-tree`, `-c`), delegates to `cmd.Execute()` |
+| `cmd/` | Cobra command definitions (one file per subcommand), view sorting logic, and passthrough security infrastructure (`passthrough.go`, `passthrough_unix.go`, `passthrough_windows.go`) |
 | `internal/git/` | All interactions with the `git` binary — branch listing, sync status, checkout, worktree status |
 | `internal/store/` | JSON persistence layer — load/save/validate the `.git/gcm.json` store |
 | `internal/ui/` | Terminal output — static tree rendering (`ui.go`), view TUI (`tui_view.go`), and commit TUI (`tui_commit.go`) |
@@ -49,6 +49,24 @@ Version is injected at build time via `-ldflags -X github.com/siddhesh/gcm/cmd.v
 - [internal/ai/CONTEXT.md](internal/ai/CONTEXT.md) — AI generation layer
 - [internal/config/CONTEXT.md](internal/config/CONTEXT.md) — user config (API key storage)
 - [cmd/CONTEXT.md](cmd/CONTEXT.md) — CLI commands and view sorting
+
+## Testing Contract
+
+Every contributor (human or AI) must follow these rules when adding or modifying code:
+
+| Code type | Rule | Where |
+|---|---|---|
+| Pure function (input → output, no side effects) | **Must** have a unit test | `cmd/logic_test.go` or `<pkg>/<file>_test.go` |
+| HTTP client call | **Must** inject client via constructor and test error paths with `httptest` | alongside source |
+| Command runner (orchestrates I/O + git) | Covered by binary integration tests in `*_test.go` | no unit test needed |
+| TUI rendering | Exempt — untestable without terminal emulator | listed in `.testcoverage.yml` |
+| OS-level process exec | Exempt — security logic is unit-tested separately | listed in `.testcoverage.yml` |
+
+**Coverage gate:** `make coverage-check` enforces a minimum threshold defined in `.testcoverage.yml`.
+The threshold is a **ratchet** — it must only increase over time.
+
+- Adding a new exemption to `.testcoverage.yml` requires a justification comment in that file and an entry in `DECISIONS.md`.
+- Dropping the threshold value is not permitted without a documented reason in `DECISIONS.md`.
 
 ## Working with this codebase
 

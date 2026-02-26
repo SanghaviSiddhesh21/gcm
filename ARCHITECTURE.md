@@ -4,15 +4,19 @@
 
 ```
                          ┌──────────┐
-                         │  main.go │
-                         └────┬─────┘
+                         │  main.go │ strips global git flags (-C, --git-dir, -c ...)
+                         └────┬─────┘ distributes to cmd.SetGlobalGitFlags + git.SetGlobalFlags
                               │ cmd.Execute()
                               ▼
                          ┌──────────┐
                          │   cmd/   │  Cobra commands
-                         │          │  (init, create, assign, view, delete,
-                         │          │   categories, commit, config)
+                         │          │  (init, clone, branch, create, assign, view,
+                         │          │   delete, categories, commit, config)
+                         │          │  + passthrough.go (security, env filtering)
                          └─┬─┬─┬─┬─┘
+                              │ unknown subcommand
+                              ▼
+                         git binary (passthrough)
                            │ │ │ │
             ┌──────────────┘ │ │ └──────────────────┐
             ▼                ▼ ▼                     ▼
@@ -34,16 +38,24 @@
 
 ## Data Flow
 
-### Write operations (init, create, assign, delete)
+### Passthrough (unknown subcommand or explicit forwarding)
 
-1. `cmd` calls `git.GetRepoInfo()` to find the `.git` directory
-2. `cmd` calls `store.Load()` to read the current state from disk
-3. `cmd` mutates the store (add category, assign branch, etc.)
-4. `cmd` calls `store.Save()` to write the updated state atomically
+1. `main.go` strips and validates global flags (`-C`, `--git-dir`, `--work-tree`, `-c`)
+2. `cmd.SetGlobalGitFlags` + `git.SetGlobalFlags` receive the flags
+3. `rootCmd.RunE` calls `checkPassthroughArgs` (security denylist) then `passthroughGit`
+4. `passthroughGit` builds a filtered env (`buildPassthroughEnv`), runs git via `c.Run()` (same process group as gcm so pagers and editors can access the TTY), and returns the exit code
+
+### Write operations (init, clone, create, assign, delete, branch)
+
+1. `cmd` runs any necessary git operation (e.g. `git init`, `git clone`) via `passthroughGit`
+2. `cmd` calls `git.GetRepoInfo()` to find the `.git` directory
+3. `cmd` calls `store.LoadOrCreate()` to read the current state from disk (creates a fresh store if none exists)
+4. `cmd` mutates the store (add category, assign branch, rename branch, etc.)
+5. `cmd` calls `store.Save()` to write the updated state atomically
 
 ### Read operations (view, categories)
 
-1. `cmd` calls `git.GetRepoInfo()` + `store.Load()` as above
+1. `cmd` calls `git.GetRepoInfo()` + `store.LoadOrCreate()` as above
 2. `cmd` calls `git.ListBranches()`, `git.CurrentBranch()`, and optionally `git.ListRemoteBranches()` + `git.SyncStatus()` + `git.BranchCommitTimes()`
 3. `cmd/view.go` builds a sorted category-to-branches map with sync tags
 4. If stdout is a terminal → `ui.RunTUI()` launches the Bubbletea interactive view
@@ -82,7 +94,7 @@ ai      ──→  internal/config  (reads API key for X-User-Api-Key header)
 
 ## Boundaries
 
-- **git boundary:** All git interactions go through `internal/git`. No other package runs `exec.Command("git", ...)`.
+- **git boundary:** All internal git queries go through `internal/git`. Passthrough to git for user-facing commands goes through `cmd/passthrough_unix.go` / `cmd/passthrough_windows.go`, which is the only place `exec.Command("git", ...)` is called outside `internal/git`.
 - **persistence boundary:** All file I/O for `gcm.json` goes through `internal/store`. The `cmd` layer never reads or writes the file directly.
 - **display boundary:** All terminal output formatting lives in `internal/ui`. The `cmd` layer only calls `fmt.Printf` for simple success messages and `fmt.Fprintf(os.Stderr, ...)` for errors.
 - **config boundary:** All reads and writes of `~/.gcm/config.json` go through `internal/config`. No other package touches that file.

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 
 	"github.com/mattn/go-isatty"
 	"github.com/siddhesh/gcm/internal/ai"
@@ -29,17 +28,14 @@ With -g, generate a commit message using local AI (offline):
 Note: -g cannot be combined with other flags.`,
 	DisableFlagParsing: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		for _, arg := range args {
-			if arg == "--help" || arg == "-h" {
-				return cmd.Help()
-			}
+		if checkHelp(args) {
+			return cmd.Help()
 		}
 
 		if !containsGenerateFlag(args) {
 			return passthroughGitCommit(args)
 		}
 
-		// -g must be the only argument
 		if len(args) > 1 {
 			fmt.Fprintf(os.Stderr, "error: '-g' cannot be combined with other flags\n\n")
 			return cmd.Help()
@@ -49,7 +45,6 @@ Note: -g cannot be combined with other flags.`,
 	},
 }
 
-// containsGenerateFlag reports whether -g is present in args.
 func containsGenerateFlag(args []string) bool {
 	for _, arg := range args {
 		if arg == "-g" {
@@ -59,17 +54,10 @@ func containsGenerateFlag(args []string) bool {
 	return false
 }
 
-// passthroughGitCommit shells directly to git commit with the provided args,
-// forwarding stdin/stdout/stderr so interactive git flows work correctly.
 func passthroughGitCommit(args []string) error {
-	c := exec.Command("git", append([]string{"commit"}, args...)...)
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	return c.Run()
+	return passthroughGit(globalGitFlags, append([]string{"commit"}, args...))
 }
 
-// runGenerateCommit runs the AI generation flow: validate → diff → TUI → commit.
 func runGenerateCommit() error {
 	if !isatty.IsTerminal(os.Stdin.Fd()) {
 		fmt.Fprintln(os.Stderr, "Error: gcm commit requires a terminal")

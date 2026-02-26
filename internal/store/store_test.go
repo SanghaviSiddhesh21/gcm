@@ -359,6 +359,175 @@ func TestLoadCorrupted(t *testing.T) {
 	}
 }
 
+// ── TestUnassignBranch ────────────────────────────────────────────────────────
+
+func TestUnassignBranch(t *testing.T) {
+	t.Run("branch-with-assignment-removed", func(t *testing.T) {
+		s := NewStore()
+		_ = s.AddCategory("feature")
+		_ = s.AssignBranch("my-branch", "feature")
+
+		s.UnassignBranch("my-branch")
+
+		if _, ok := s.Assignments["my-branch"]; ok {
+			t.Error("assignment still present after UnassignBranch")
+		}
+		if s.GetAssignment("my-branch") != UncategorizedName {
+			t.Errorf("GetAssignment after unassign = %q, want %q", s.GetAssignment("my-branch"), UncategorizedName)
+		}
+	})
+
+	t.Run("branch-with-no-assignment-is-noop", func(t *testing.T) {
+		s := NewStore()
+		// Must not panic or error.
+		s.UnassignBranch("nonexistent-branch")
+		if len(s.Assignments) != 0 {
+			t.Errorf("Assignments len = %d, want 0", len(s.Assignments))
+		}
+	})
+
+	t.Run("save-round-trip", func(t *testing.T) {
+		dir := t.TempDir()
+		s := NewStore()
+		_ = s.AddCategory("feature")
+		_ = s.AssignBranch("my-branch", "feature")
+
+		s.UnassignBranch("my-branch")
+		if err := Save(dir, s); err != nil {
+			t.Fatalf("Save() error: %v", err)
+		}
+
+		loaded, err := Load(dir)
+		if err != nil {
+			t.Fatalf("Load() error: %v", err)
+		}
+		if _, ok := loaded.Assignments["my-branch"]; ok {
+			t.Error("assignment still present after Save/Load round-trip")
+		}
+	})
+}
+
+// ── TestRenameBranch ──────────────────────────────────────────────────────────
+
+func TestRenameBranch(t *testing.T) {
+	t.Run("branch-with-assignment-key-updated", func(t *testing.T) {
+		s := NewStore()
+		_ = s.AddCategory("feature")
+		_ = s.AssignBranch("old-branch", "feature")
+
+		s.RenameBranch("old-branch", "new-branch")
+
+		if _, ok := s.Assignments["old-branch"]; ok {
+			t.Error("old key still present after RenameBranch")
+		}
+		if s.Assignments["new-branch"] != "feature" {
+			t.Errorf("Assignments[new-branch] = %q, want %q", s.Assignments["new-branch"], "feature")
+		}
+	})
+
+	t.Run("branch-with-no-assignment-is-noop", func(t *testing.T) {
+		s := NewStore()
+		before := len(s.Assignments)
+		s.RenameBranch("old-branch", "new-branch")
+		if len(s.Assignments) != before {
+			t.Error("Assignments changed for branch with no assignment")
+		}
+		if _, ok := s.Assignments["new-branch"]; ok {
+			t.Error("new key created for branch with no assignment")
+		}
+	})
+
+	t.Run("new-name-overwrites-stale-entry", func(t *testing.T) {
+		s := NewStore()
+		_ = s.AddCategory("feature")
+		_ = s.AddCategory("hotfix")
+		_ = s.AssignBranch("old-branch", "hotfix")
+		// Manually place a stale entry at the new name.
+		s.Assignments["new-branch"] = "feature"
+
+		s.RenameBranch("old-branch", "new-branch")
+
+		if s.Assignments["new-branch"] != "hotfix" {
+			t.Errorf("Assignments[new-branch] = %q, want %q", s.Assignments["new-branch"], "hotfix")
+		}
+		if _, ok := s.Assignments["old-branch"]; ok {
+			t.Error("old key still present")
+		}
+	})
+}
+
+// ── TestLoadOrCreate ──────────────────────────────────────────────────────────
+
+func TestLoadOrCreate(t *testing.T) {
+	t.Run("store-exists-loads-without-modification", func(t *testing.T) {
+		dir := t.TempDir()
+		original := NewStore()
+		_ = original.AddCategory("feature")
+		_ = original.AssignBranch("my-branch", "feature")
+		if err := Save(dir, original); err != nil {
+			t.Fatalf("Save() error: %v", err)
+		}
+
+		loaded, err := LoadOrCreate(dir)
+		if err != nil {
+			t.Fatalf("LoadOrCreate() error: %v", err)
+		}
+		if loaded.Assignments["my-branch"] != "feature" {
+			t.Errorf("assignment = %q, want %q", loaded.Assignments["my-branch"], "feature")
+		}
+	})
+
+	t.Run("store-not-found-creates-and-saves-new", func(t *testing.T) {
+		dir := t.TempDir()
+
+		s, err := LoadOrCreate(dir)
+		if err != nil {
+			t.Fatalf("LoadOrCreate() error: %v", err)
+		}
+		if !s.CategoryExists(UncategorizedName) {
+			t.Error("Uncategorized not present in new store")
+		}
+		// File must exist on disk.
+		if _, statErr := os.Stat(StorePath(dir)); statErr != nil {
+			t.Errorf("gcm.json not created: %v", statErr)
+		}
+	})
+
+	t.Run("invalid-json-returns-parse-error-does-not-overwrite", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(StorePath(dir), []byte("not json {{{"), 0o600); err != nil {
+			t.Fatalf("test setup: %v", err)
+		}
+
+		_, err := LoadOrCreate(dir)
+		if err == nil {
+			t.Fatal("LoadOrCreate() expected error for invalid JSON, got nil")
+		}
+		// Original file must not be overwritten.
+		data, _ := os.ReadFile(StorePath(dir))
+		if string(data) != "not json {{{" {
+			t.Error("corrupted file was overwritten — LoadOrCreate must not overwrite on parse error")
+		}
+	})
+
+	t.Run("empty-git-dir-returns-error-no-files-created", func(t *testing.T) {
+		_, err := LoadOrCreate("")
+		if err == nil {
+			t.Fatal("LoadOrCreate(\"\") expected error, got nil")
+		}
+		if _, statErr := os.Stat("gcm.json"); statErr == nil {
+			t.Error("gcm.json created in CWD with empty gitDir")
+		}
+	})
+
+	t.Run("nonexistent-git-dir-returns-error-no-files-created", func(t *testing.T) {
+		_, err := LoadOrCreate("/nonexistent/path/that/cannot/exist")
+		if err == nil {
+			t.Fatal("LoadOrCreate() with nonexistent dir expected error, got nil")
+		}
+	})
+}
+
 // ── TestSaveAtomic ────────────────────────────────────────────────────────────
 
 func TestSaveAtomic(t *testing.T) {

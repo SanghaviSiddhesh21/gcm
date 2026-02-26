@@ -9,7 +9,6 @@ import (
 	"github.com/siddhesh/gcm/internal/git"
 )
 
-// itemKind discriminates rows in the flat list
 type itemKind int
 
 const (
@@ -17,7 +16,6 @@ const (
 	itemBranch
 )
 
-// item represents a single navigable row in the TUI
 type item struct {
 	kind      itemKind
 	label     string // category name or branch name
@@ -27,7 +25,6 @@ type item struct {
 	isLast    bool // last branch in category (for └── vs ├──)
 }
 
-// viewMode discriminates between browse and confirmation modes
 type viewMode int
 
 const (
@@ -35,7 +32,6 @@ const (
 	modeConfirm
 )
 
-// model is the Bubbletea model
 type model struct {
 	gitDir        string
 	categories    []string
@@ -58,7 +54,6 @@ type model struct {
 	height     int
 }
 
-// Async message types
 type checkoutResultMsg struct {
 	branch string
 	err    error
@@ -69,7 +64,6 @@ type worktreeStatusMsg struct {
 	err    error
 }
 
-// Lipgloss styles
 var (
 	styleCategory = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))                                  // cyan
 	styleCurrent  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("2"))                                  // green
@@ -86,7 +80,6 @@ var (
 	styleError    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))                                             // red
 )
 
-// Async command constructors
 func doCheckout(gitDir, branch string) tea.Cmd {
 	return func() tea.Msg {
 		err := git.Checkout(gitDir, branch)
@@ -101,12 +94,10 @@ func doWorktreeStatus(gitDir string) tea.Cmd {
 	}
 }
 
-// Init implements the Bubbletea Init method
 func (m model) Init() tea.Cmd {
 	return nil
 }
 
-// Update implements the Bubbletea Update method
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
@@ -240,7 +231,6 @@ func (m *model) ensureVisible() {
 	}
 }
 
-// View implements the Bubbletea View method
 func (m model) View() string {
 	var sb strings.Builder
 
@@ -269,7 +259,6 @@ func (m model) View() string {
 		return sb.String()
 	}
 
-	// Tree body - only render visible items
 	footerHeight := 2
 	visibleHeight := m.height - footerHeight
 	endIdx := m.viewportStartIdx + visibleHeight
@@ -324,7 +313,6 @@ func (m model) View() string {
 		}
 	}
 
-	// Footer
 	sb.WriteString("\n")
 	if m.errMsg != "" {
 		sb.WriteString(styleError.Render(m.errMsg) + "\n")
@@ -335,7 +323,6 @@ func (m model) View() string {
 	return sb.String()
 }
 
-// renderTagLipgloss returns a styled tag string using lipgloss
 func renderTagLipgloss(tag string) string {
 	if tag == "" {
 		return ""

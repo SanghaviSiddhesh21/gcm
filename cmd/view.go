@@ -47,7 +47,7 @@ Note: branches whose remote was deleted will show as [Local] after git fetch --p
 			return err
 		}
 
-		s, err := store.Load(repoInfo.GitDir)
+		s, err := store.LoadOrCreate(repoInfo.GitDir)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 			return err

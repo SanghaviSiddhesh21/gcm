@@ -1,0 +1,16 @@
+# https://github.com/vladopajic/go-test-coverage
+
+profile: coverage.out
+
+threshold:
+  # Ratchet — only increase, never decrease. Update after adding tests.
+  total: 67
+
+exclude:
+  paths:
+    # TUI — requires a real terminal; untestable without one.
+    - internal/ui/
+
+    # OS-specific exec wrappers — security logic is tested separately in logic_test.go.
+    - cmd/passthrough_unix\.go
+    - cmd/passthrough_windows\.go

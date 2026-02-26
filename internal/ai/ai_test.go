@@ -180,6 +180,36 @@ func TestGenerate_EmptyChoices(t *testing.T) {
 	}
 }
 
+func TestGenerate_BadJSON(t *testing.T) {
+	gen, srv := newTestGenerator(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("not valid json"))
+	})
+	defer srv.Close()
+
+	_, err := gen.Generate(context.Background(), sampleDiff)
+	if !errors.Is(err, ErrGenerationFailed) {
+		t.Errorf("Generate() bad JSON error = %v, want ErrGenerationFailed", err)
+	}
+}
+
+func TestGenerate_NetworkError(t *testing.T) {
+	gen, srv := newTestGenerator(func(w http.ResponseWriter, r *http.Request) {})
+	srv.Close() // close immediately so the request fails
+
+	_, err := gen.Generate(context.Background(), sampleDiff)
+	if !errors.Is(err, ErrGenerationFailed) {
+		t.Errorf("Generate() network error = %v, want ErrGenerationFailed", err)
+	}
+}
+
+func TestNew(t *testing.T) {
+	g := New()
+	if g == nil {
+		t.Error("New() returned nil")
+	}
+}
+
 func TestGenerate_UserKeyHeader(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 

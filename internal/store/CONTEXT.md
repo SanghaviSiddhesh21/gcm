@@ -9,7 +9,10 @@ JSON persistence layer for the `.git/gcm.json` file. Owns the data model, valida
 - **NewStore** — Creates a fresh store with only the immutable "Uncategorized" category.
 - **Load / Save** — Read from / write to `<gitDir>/gcm.json`. Save is atomic (write to `.tmp`, rename).
 - **ValidateCategoryName** — Enforces `^[a-zA-Z0-9-]+$`, max 64 chars, rejects the reserved name "Uncategorized".
-- **Store methods** — `AddCategory`, `RemoveCategory`, `AssignBranch`, `BranchesInCategory`, `CategoryExists`, `GetCategory`, `GetAssignment`.
+- **LoadOrCreate** — Loads the store if it exists; creates and saves a fresh store if not. Used by all commands so that `gcm init` is no longer required before first use.
+- **Store methods** — `AddCategory`, `RemoveCategory`, `AssignBranch`, `UnassignBranch`, `RenameBranch`, `BranchesInCategory`, `CategoryExists`, `GetCategory`, `GetAssignment`.
+  - `UnassignBranch(branch)` — removes a branch's assignment (no-op if unassigned). Called by `gcm branch -d`.
+  - `RenameBranch(old, new)` — migrates an assignment from old branch name to new. Called by `gcm branch -m`.
 
 ## Key Invariants
 
@@ -22,7 +25,7 @@ JSON persistence layer for the `.git/gcm.json` file. Owns the data model, valida
 ## Gotchas
 
 - The store has no migration logic. If the schema changes, old `gcm.json` files will fail to parse.
-- `ValidateCategoryName` compiles a new regex on every call. Not a performance concern at current usage levels, but worth noting.
+- `ValidateCategoryName` uses a package-level compiled regex `categoryNameRe` (not per-call compilation).
 - Category names reject underscores despite the README claiming they're allowed. This is a known doc-code mismatch.
 
 ## Testing

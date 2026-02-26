@@ -6,15 +6,21 @@ Cobra command definitions. One file per subcommand plus `root.go` for the root c
 
 | File | Command | Notes |
 |---|---|---|
-| `root.go` | `gcm` | Root command. Version injected via ldflags. Disables default completion command. |
-| `init.go` | `gcm init` | Creates `.git/gcm.json` with a fresh store. Fails if already initialized. |
+| `root.go` | `gcm` | Root command. `DisableFlagParsing: true`; intercepts `--version`/`-v` and `--help`/`-h`, then passes unknown subcommands to git. Version injected via ldflags. |
+| `passthrough.go` | — | Shared security infrastructure: `globalGitFlags`, `checkHelp`, `IsDeniedConfigKey`, `checkPassthroughArgs`, `buildPassthroughEnv`, `IsSecurityDenied`. |
+| `passthrough_unix.go` | — | Unix `passthroughGit`: plain `c.Run()` (no `Setpgid`; git stays in terminal's foreground process group so pagers and editors work). `passthroughGitHelp` injects `--no-man` in non-TTY. |
+| `passthrough_windows.go` | — | Windows `passthroughGit`: plain `c.Run()`. |
+| `init.go` | `gcm init` | Runs `git init [args...]`, then calls `store.LoadOrCreate`. Auto-detects target directory. |
+| `clone.go` | `gcm clone` | Runs `git clone [args...]`, then calls `store.LoadOrCreate` in the cloned repo. Infers target directory via `cloneTargetDir`. |
+| `branch.go` | `gcm branch` | Passthrough to `git branch`. After `-m`/`-M` rename: calls `store.RenameBranch`. After `-d`/`-D` delete: calls `store.UnassignBranch`. |
 | `create.go` | `gcm create <category>` | Validates name, adds category to store. |
 | `assign.go` | `gcm assign <branch> <category>` | Verifies branch exists via git, verifies category exists in store, then assigns. Reports reassignment if branch was previously in a different category. |
 | `view.go` | `gcm view [category]` | The most complex command. Gathers branches, sync status, commit times, sorts everything, then delegates to TUI or static renderer. |
 | `delete.go` | `gcm delete <category>` | Removes category, reports how many branches were moved to Uncategorized. |
 | `categories.go` | `gcm categories` | Lists category names. |
-| `commit.go` | `gcm commit` | Passthrough to `git commit`. `-g` flag triggers AI commit TUI (requires a terminal). |
-| `config.go` | `gcm config` | Passthrough to `git config`. Intercepts `api-key` args for GCM-managed config in `~/.gcm/config.json`. |
+| `commit.go` | `gcm commit` | Passthrough to `git commit` via shared `passthroughGit`. `-g` flag triggers AI commit TUI (requires a terminal). |
+| `config.go` | `gcm config` | Passthrough to `git config` via shared `passthroughGit`. Intercepts `api-key` args for GCM-managed config in `~/.gcm/config.json`. |
+| `help.go` | `gcm help` | Custom help routing: gcm-native commands → gcm help; "both" commands (commit, config, init, branch, clone) → gcm section + git section; git-only commands → `git help` passthrough. `runHelpAll` also invoked by `rootCmd.RunE` for `gcm --help`. |
 
 ## View sorting logic (`view.go`)
 
@@ -28,7 +34,7 @@ This sorting logic lives in `cmd` rather than `ui` because it requires commit-ti
 
 Every command follows the same structure:
 1. Call `git.GetRepoInfo()` to locate the repository
-2. Call `store.Load()` to read current state (except `init`, which creates a new store)
+2. Call `store.LoadOrCreate()` to read current state (auto-creates store on first use)
 3. Perform the operation
 4. Call `store.Save()` to persist changes (for mutating commands)
 5. Print a success message
@@ -37,7 +43,27 @@ Error handling: errors are both printed to stderr and returned. Cobra's `Silence
 
 ## Passthrough pattern
 
-`commit.go` and `config.go` use `DisableFlagParsing: true` and inspect `args` manually. Both commands intercept a specific arg (`-g` for commit, `api-key` for config) and delegate everything else verbatim to the underlying `git` command via `exec.Command`, forwarding stdin/stdout/stderr. This mirrors how `git` itself handles subcommand extensions.
+`rootCmd` has `DisableFlagParsing: true` and `Args: cobra.ArbitraryArgs`. Unknown subcommands reach `rootCmd.RunE`, which calls `passthroughGit(globalGitFlags, args)`. Individual subcommands that need to forward to git (commit, config, branch, clone, init) also use `DisableFlagParsing: true` and call `passthroughGit` or the shared helpers.
+
+All passthrough goes through `passthroughGit` in `passthrough_unix.go`/`passthrough_windows.go`, which:
+- Runs `checkPassthroughArgs` (security denylist for `-c` keys, `--upload-pack`, `--receive-pack`, `--exec`, `ext::` URLs, `-u` in fetch-family)
+- Builds a filtered env via `buildPassthroughEnv` (strips `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n`/`GIT_CONFIG_VALUE_n`; injects `GIT_TERMINAL_PROMPT=0` in non-TTY)
+- On Unix: uses plain `c.Run()` — no `Setpgid`, no signal goroutine; git stays in the terminal's foreground process group so pagers (`less`) and editors work; Ctrl+C reaches git directly via the kernel
+- On Unix: special-cases `git help` to inject `--no-man` in non-TTY to avoid pager hangs
+
+`main.go` strips global git flags (`-C`, `--git-dir`, `--work-tree`, `-c`) from `os.Args` before Cobra dispatch and distributes them to both `cmd.SetGlobalGitFlags` and `git.SetGlobalFlags`. The `-c` denylist is enforced at both the `main.go` parse stage and again inside `checkPassthroughArgs`.
+
+## Security denylist
+
+`IsDeniedConfigKey` blocks `-c key=val` where key matches (case-insensitive):
+- `core.fsmonitor`, `core.gitproxy`, `core.hookspath`, `core.editor`
+- `sequence.editor`, `diff.external`, `diff.tool`, `diff.guitool`
+- `merge.tool`, `merge.guitool`, `gpg.program`, `gpg.ssh.defaultkeycommand`
+- `protocol.ext.allow`
+- `filter.<name>.clean|smudge|process` (wildcard)
+- `alias.*` (all aliases — shell execution via `!`)
+
+`core.sshCommand` and `credential.helper` are deliberately **not** denied (legitimate CI/agent use).
 
 ## Gotchas
 
