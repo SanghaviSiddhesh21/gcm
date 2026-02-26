@@ -21,7 +21,7 @@ var cloneCmd = &cobra.Command{
 		}
 
 		if len(args) == 0 {
-			return fmt.Errorf("Usage: gcm clone <url> [directory]")
+			return fmt.Errorf("usage: gcm clone <url> [directory]")
 		}
 
 		if err := passthroughGit(globalGitFlags, append([]string{"clone"}, args...)); err != nil {
@@ -53,14 +53,14 @@ func cloneTargetDir(args []string) string {
 		"-u": true, "--upload-pack": true,
 		"--reference": true, "--reference-if-able": true,
 		"--origin": true, "-o": true,
-		"--depth": true,
+		"--depth":         true,
 		"--shallow-since": true, "--shallow-exclude": true,
 		"--jobs": true, "-j": true,
 		"--separate-git-dir": true,
-		"--config": true, "-c": true,
+		"--config":           true, "-c": true,
 		"--server-option": true,
-		"--filter": true,
-		"--bundle-uri": true,
+		"--filter":        true,
+		"--bundle-uri":    true,
 	}
 
 	nonFlags := make([]string, 0, 2)

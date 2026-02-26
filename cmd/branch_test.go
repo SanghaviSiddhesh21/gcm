@@ -31,9 +31,7 @@ func setupGCMRepo(t *testing.T) string {
 func createAndAssignBranch(t *testing.T, dir, branch, category string) {
 	t.Helper()
 	gitBranch(t, dir, "branch", branch)
-	if _, err := runGCM(t, dir, "create", category); err != nil {
-		// ignore ErrCategoryExists
-	}
+	_, _ = runGCM(t, dir, "create", category) // ignore ErrCategoryExists
 	if _, err := runGCM(t, dir, "assign", branch, category); err != nil {
 		t.Fatalf("gcm assign %s %s: %v", branch, category, err)
 	}

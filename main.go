@@ -50,7 +50,7 @@ func parseGlobalGitFlags(args []string) (remaining []string, globalFlags []strin
 			if i+1 >= len(args) {
 				return nil, nil, fmt.Errorf("-C requires a path argument")
 			}
-			path := args[i+1]
+			path := args[i+1] //nolint:gosec // bounds checked above
 			if err := os.Chdir(path); err != nil {
 				return nil, nil, fmt.Errorf("-C %s: %w", path, err)
 			}
@@ -73,7 +73,7 @@ func parseGlobalGitFlags(args []string) (remaining []string, globalFlags []strin
 			if i+1 >= len(args) {
 				return nil, nil, fmt.Errorf("--git-dir requires a path argument")
 			}
-			path := args[i+1]
+			path := args[i+1] //nolint:gosec // bounds checked above
 			if err := validatePath("--git-dir", path); err != nil {
 				return nil, nil, err
 			}
@@ -96,7 +96,7 @@ func parseGlobalGitFlags(args []string) (remaining []string, globalFlags []strin
 			if i+1 >= len(args) {
 				return nil, nil, fmt.Errorf("--work-tree requires a path argument")
 			}
-			path := args[i+1]
+			path := args[i+1] //nolint:gosec // bounds checked above
 			if err := validatePath("--work-tree", path); err != nil {
 				return nil, nil, err
 			}
@@ -110,7 +110,7 @@ func parseGlobalGitFlags(args []string) (remaining []string, globalFlags []strin
 			if i+1 >= len(args) {
 				return nil, nil, fmt.Errorf("-c requires a key=val argument")
 			}
-			kv := args[i+1]
+			kv := args[i+1] //nolint:gosec // bounds checked above
 			if !strings.Contains(kv, "=") {
 				return nil, nil, fmt.Errorf("-c %q: malformed argument (missing '=')", kv)
 			}
@@ -139,7 +139,7 @@ func validatePath(flag, path string) error {
 	if err != nil {
 		return fmt.Errorf("%s %q: %w", flag, path, err)
 	}
-	if _, err := os.Stat(abs); err != nil {
+	if _, err := os.Stat(abs); err != nil { //nolint:gosec // path is from --git-dir/--work-tree CLI flag, not user-controlled input
 		return fmt.Errorf("%s %q: path does not exist", flag, path)
 	}
 	return nil
@@ -160,7 +160,7 @@ func exitCode(err error) int {
 		return code
 	}
 	// Killed by signal — shell convention: 128 + signal number
-	if ws, ok := exitErr.ProcessState.Sys().(syscall.WaitStatus); ok {
+	if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok {
 		if ws.Signaled() {
 			return 128 + int(ws.Signal())
 		}

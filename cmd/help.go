@@ -45,7 +45,7 @@ func runHelpAll(root *cobra.Command) error {
 	if err := root.Help(); err != nil {
 		return err
 	}
-	fmt.Fprintln(os.Stdout, "\nGit commands (via passthrough):")
+	_, _ = fmt.Fprintln(os.Stdout, "\nGit commands (via passthrough):")
 	return passthroughGit(globalGitFlags, []string{"help", "--all"})
 }
 
@@ -69,7 +69,7 @@ func runHelpTopic(root *cobra.Command, topic string) error {
 				break
 			}
 		}
-		fmt.Fprintf(os.Stdout, "\n--- git help %s ---\n\n", topic)
+		_, _ = fmt.Fprintf(os.Stdout, "\n--- git help %s ---\n\n", topic)
 		return passthroughGit(globalGitFlags, []string{"help", topic})
 	}
 

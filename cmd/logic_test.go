@@ -204,7 +204,7 @@ func TestRepoNameFromURL(t *testing.T) {
 		{"https://github.com/user/repo", "repo"},
 		{"git@github.com:user/repo.git", "repo"},
 		{"/local/path/to/repo.git", "repo"},
-		{"/local/path/to/repo/", "repo"},    // trailing slash stripped
+		{"/local/path/to/repo/", "repo"},     // trailing slash stripped
 		{"/local/path/to/repo.git/", "repo"}, // both
 	}
 	for _, tt := range tests {
