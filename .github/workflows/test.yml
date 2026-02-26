@@ -20,5 +20,8 @@ jobs:
       - name: Run tests
         run: make test
 
+      - name: Install go-test-coverage
+        run: go install github.com/vladopajic/go-test-coverage/v2@latest
+
       - name: Check coverage
         run: make coverage-check
