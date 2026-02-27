@@ -76,6 +76,18 @@ Category names must match `^[a-zA-Z0-9-]+$`, max 64 characters. Underscores are 
 
 The tool is entirely synchronous and single-threaded. The Bubbletea TUI uses its own event loop but all git operations and store mutations are sequential. There is no shared state, no goroutine pools, no channels beyond what Bubbletea uses internally.
 
+## Sliding window + summary phase for commit message regeneration
+
+`gcm commit -g` sends only 6000 chars of the filtered diff per generation. For large diffs this means the AI only sees a fraction of the changes on the first attempt, causing regenerated messages to repeat the same type (e.g. always `docs:`).
+
+To address this, regeneration uses two phases:
+
+**Window phase**: each user 'r' press advances a non-overlapping 6000-char window into the diff body. All previously generated messages are included as context ("Previous attempts generated these commit messages…"), so the AI can build on what it has already seen.
+
+**Summary phase**: once `attempt × 6000 ≥ len(filtered body)` (checked via `ai.IsDiffExhausted`), the diff is exhausted. The AI is no longer sent raw diff content — instead it receives all window-phase messages as the "gist of the changes" and is asked to synthesise a single commit message. Subsequent 'r' presses accumulate prior summary attempts alongside the gist with "however, it/they have not captured the complete essence".
+
+`summaryMessages != nil` (even an empty slice) is used as the sentinel for the summary phase rather than a separate bool, keeping the `commitModel` struct minimal.
+
 ## AI via Cloudflare Worker proxy, not direct Groq API
 
 `gcm commit -g` sends diffs to a Cloudflare Worker rather than calling the Groq API directly. This lets the tool work out-of-the-box without requiring users to supply a Groq key — the Worker uses a shared gcm key with KV-backed rate limiting (3 req/min, 20 req/day per IP). Users who hit rate limits can supply their own key via `gcm config api-key`.
@@ -130,9 +142,10 @@ The actual HTTP POST logic lives in a separate `http.go` file. This allows `.tes
 
 `config.load()` now caches the parsed `file{}` in a `sync.Once` to avoid repeated disk reads within a single `gcm` invocation. The cache is write-through: `SetAPIKey`, `UnsetAPIKey`, and `GetOrCreateInstallID` update `cachedFile` in-memory after writing to disk. Tests reset `configOnce = sync.Once{}` in `withTempHome` to ensure isolation.
 
-## Coverage threshold lowered after telemetry feature
+## Coverage threshold history
 
-The `make coverage-check` threshold was lowered from 67% to 58% after the telemetry feature (v0.1.10). The feature added new command-runner functions (`runCategories`, per-command telemetry wrappers, etc.) that are correctly exempt from unit tests per the testing contract — they orchestrate I/O and git calls and are covered exclusively by binary integration tests (`cmd/*_test.go`). Binary integration tests run the compiled gcm binary as a subprocess, so their coverage is not captured in `coverage.out`. Adding the exempt code without adding proportional measured coverage lowered the overall percentage below the 67% ratchet. The threshold was adjusted to reflect the true state of measured (non-exempt) logic coverage, and will ratchet upward as new testable logic is added.
+- **67% → 58%**: Lowered after the telemetry feature (v0.1.10). New command-runner functions (`runCategories`, per-command telemetry wrappers, etc.) are exempt from unit tests and covered only by binary integration tests, whose coverage is not captured in `coverage.out`.
+- **58% → 62%**: Raised after adding unit tests for previously untested pure functions: `parseGlobalGitFlags` error and space-form paths, `Generate` summary-phase branches, `IsDiffExhausted`, `prepareDiff` windowing, and `filterDiff`.
 
 ## golangci-lint exclusions
 

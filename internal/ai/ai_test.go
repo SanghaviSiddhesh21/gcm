@@ -71,7 +71,7 @@ index 111..222 100644
 +another added line`
 
 func TestPrepareDiff_FileList(t *testing.T) {
-	result := prepareDiff(sampleDiff)
+	result := prepareDiff(sampleDiff, 0)
 	if !strings.Contains(result, "cmd/foo.go") {
 		t.Error("prepareDiff() missing cmd/foo.go in file list")
 	}
@@ -81,14 +81,14 @@ func TestPrepareDiff_FileList(t *testing.T) {
 }
 
 func TestPrepareDiff_StripsContextLines(t *testing.T) {
-	result := prepareDiff(sampleDiff)
+	result := prepareDiff(sampleDiff, 0)
 	if strings.Contains(result, "unchanged line") {
 		t.Error("prepareDiff() should strip unchanged context lines")
 	}
 }
 
 func TestPrepareDiff_KeepsChangedLines(t *testing.T) {
-	result := prepareDiff(sampleDiff)
+	result := prepareDiff(sampleDiff, 0)
 	if !strings.Contains(result, "+added line") {
 		t.Error("prepareDiff() missing added line")
 	}
@@ -104,12 +104,195 @@ func TestPrepareDiff_Truncation(t *testing.T) {
 	for i := 0; i < 300; i++ {
 		sb.WriteString("+this is a long added line that adds a lot of content to the diff\n")
 	}
-	result := prepareDiff(sb.String())
+	result := prepareDiff(sb.String(), 0)
 	if !strings.HasSuffix(result, "(truncated)") {
 		t.Error("prepareDiff() should truncate large diffs with '(truncated)' suffix")
 	}
 	if len(result) > 6100 {
 		t.Errorf("prepareDiff() result length = %d, want <= 6100", len(result))
+	}
+}
+
+func TestPrepareDiff_SlidingWindow(t *testing.T) {
+	// Build a diff body well over 12000 chars so windows 0 and 1 are distinct.
+	var sb strings.Builder
+	sb.WriteString("diff --git a/big.go b/big.go\n--- a/big.go\n+++ b/big.go\n@@ -1 +1 @@\n")
+	for i := 0; i < 300; i++ {
+		sb.WriteString("+this is a long added line that adds a lot of content to the diff\n")
+	}
+	diff := sb.String()
+
+	w0 := prepareDiff(diff, 0)
+	w1 := prepareDiff(diff, 1)
+
+	if w0 == w1 {
+		t.Error("prepareDiff() window 0 and window 1 should differ for a large diff")
+	}
+	// Both windows should still contain the file header.
+	if !strings.Contains(w0, "big.go") || !strings.Contains(w1, "big.go") {
+		t.Error("prepareDiff() windows should include the Changed files header")
+	}
+}
+
+func TestPrepareDiff_WindowClamp(t *testing.T) {
+	// A diff that fits in one window — high attempt should return same content as attempt 0.
+	w0 := prepareDiff(sampleDiff, 0)
+	w99 := prepareDiff(sampleDiff, 99)
+	if w0 != w99 {
+		t.Error("prepareDiff() should clamp to last window when attempt exceeds diff length")
+	}
+}
+
+// ── IsDiffExhausted ───────────────────────────────────────────────────────────
+
+func TestIsDiffExhausted(t *testing.T) {
+	// sampleDiff body is well under 6000 chars.
+	if IsDiffExhausted(sampleDiff, 0) {
+		t.Error("IsDiffExhausted(attempt=0) should be false for small diff")
+	}
+	if !IsDiffExhausted(sampleDiff, 1) {
+		t.Error("IsDiffExhausted(attempt=1) should be true for small diff (body < 6000)")
+	}
+}
+
+func TestIsDiffExhausted_LargeDiff(t *testing.T) {
+	var sb strings.Builder
+	sb.WriteString("diff --git a/big.go b/big.go\n--- a/big.go\n+++ b/big.go\n@@ -1 +1 @@\n")
+	for i := 0; i < 300; i++ {
+		sb.WriteString("+this is a long added line that adds a lot of content to the diff\n")
+	}
+	diff := sb.String()
+	if IsDiffExhausted(diff, 0) {
+		t.Error("IsDiffExhausted(attempt=0) should be false for large diff")
+	}
+	if IsDiffExhausted(diff, 1) {
+		t.Error("IsDiffExhausted(attempt=1) should be false for diff > 12000 chars")
+	}
+	// body ~19500 chars; attempt 4 * 6000 = 24000 > 19500
+	if !IsDiffExhausted(diff, 4) {
+		t.Error("IsDiffExhausted(attempt=4) should be true for diff ~19500 chars")
+	}
+}
+
+// ── Generate window-phase prompt with prior gist ──────────────────────────────
+
+func TestGenerate_WindowPhase_WithGist(t *testing.T) {
+	var capturedBody string
+	gen, srv := newTestGenerator(func(w http.ResponseWriter, r *http.Request) {
+		var req chatRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if len(req.Messages) > 0 {
+			capturedBody = req.Messages[len(req.Messages)-1].Content
+		}
+		resp := chatResponse{Choices: []struct {
+			Message chatMessage `json:"message"`
+		}{{Message: chatMessage{Content: "feat: window 2"}}}}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+	defer srv.Close()
+
+	gist := []string{"docs: update CONTEXT"}
+	_, err := gen.Generate(context.Background(), sampleDiff, gist, nil, 1)
+	if err != nil {
+		t.Fatalf("Generate() unexpected error: %v", err)
+	}
+	if !strings.Contains(capturedBody, "Previous attempts generated") {
+		t.Error("window-phase prompt with gist should contain 'Previous attempts generated'")
+	}
+	if !strings.Contains(capturedBody, "docs: update CONTEXT") {
+		t.Error("window-phase prompt should include prior gist messages")
+	}
+	if strings.Contains(capturedBody, "gist of the changes") {
+		t.Error("window-phase prompt should NOT use summary-phase language")
+	}
+}
+
+// ── Generate summary-phase prompt ─────────────────────────────────────────────
+
+func TestGenerate_SummaryPhase_NoSummaryPrev(t *testing.T) {
+	var capturedBody string
+	gen, srv := newTestGenerator(func(w http.ResponseWriter, r *http.Request) {
+		var req chatRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if len(req.Messages) > 0 {
+			capturedBody = req.Messages[len(req.Messages)-1].Content
+		}
+		resp := chatResponse{Choices: []struct {
+			Message chatMessage `json:"message"`
+		}{{Message: chatMessage{Content: "feat: summary"}}}}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+	defer srv.Close()
+
+	gist := []string{"docs: update CONTEXT", "refactor: telemetry wiring"}
+	_, err := gen.Generate(context.Background(), sampleDiff, gist, []string{}, 0)
+	if err != nil {
+		t.Fatalf("Generate() unexpected error: %v", err)
+	}
+	if !strings.Contains(capturedBody, "gist of the changes") {
+		t.Error("summary-phase prompt should mention 'gist of the changes'")
+	}
+	if !strings.Contains(capturedBody, "docs: update CONTEXT") {
+		t.Error("summary-phase prompt should include gist messages")
+	}
+}
+
+func TestGenerate_SummaryPhase_MultipleSummaryPrev(t *testing.T) {
+	var capturedBody string
+	gen, srv := newTestGenerator(func(w http.ResponseWriter, r *http.Request) {
+		var req chatRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if len(req.Messages) > 0 {
+			capturedBody = req.Messages[len(req.Messages)-1].Content
+		}
+		resp := chatResponse{Choices: []struct {
+			Message chatMessage `json:"message"`
+		}{{Message: chatMessage{Content: "feat: third summary"}}}}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+	defer srv.Close()
+
+	gist := []string{"docs: update CONTEXT"}
+	summaryPrev := []string{"feat: add telemetry", "refactor: restructure telemetry"}
+	_, err := gen.Generate(context.Background(), sampleDiff, gist, summaryPrev, 0)
+	if err != nil {
+		t.Fatalf("Generate() unexpected error: %v", err)
+	}
+	if !strings.Contains(capturedBody, "they have not captured") {
+		t.Error("plural summaryPrev should use 'they have not captured'")
+	}
+}
+
+func TestGenerate_SummaryPhase_WithSummaryPrev(t *testing.T) {
+	var capturedBody string
+	gen, srv := newTestGenerator(func(w http.ResponseWriter, r *http.Request) {
+		var req chatRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if len(req.Messages) > 0 {
+			capturedBody = req.Messages[len(req.Messages)-1].Content
+		}
+		resp := chatResponse{Choices: []struct {
+			Message chatMessage `json:"message"`
+		}{{Message: chatMessage{Content: "feat: better summary"}}}}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+	defer srv.Close()
+
+	gist := []string{"docs: update CONTEXT", "refactor: telemetry wiring"}
+	summaryPrev := []string{"feat: add telemetry and update docs"}
+	_, err := gen.Generate(context.Background(), sampleDiff, gist, summaryPrev, 0)
+	if err != nil {
+		t.Fatalf("Generate() unexpected error: %v", err)
+	}
+	if !strings.Contains(capturedBody, "not captured the complete essence") {
+		t.Error("summary-phase prompt with prior summary should mention incomplete essence")
+	}
+	if !strings.Contains(capturedBody, "feat: add telemetry and update docs") {
+		t.Error("summary-phase prompt should include prior summary message")
 	}
 }
 
@@ -134,7 +317,7 @@ func TestGenerate_Success(t *testing.T) {
 	})
 	defer srv.Close()
 
-	msg, err := gen.Generate(context.Background(), sampleDiff)
+	msg, err := gen.Generate(context.Background(), sampleDiff, nil, nil, 0)
 	if err != nil {
 		t.Fatalf("Generate() unexpected error: %v", err)
 	}
@@ -149,7 +332,7 @@ func TestGenerate_RateLimited(t *testing.T) {
 	})
 	defer srv.Close()
 
-	_, err := gen.Generate(context.Background(), sampleDiff)
+	_, err := gen.Generate(context.Background(), sampleDiff, nil, nil, 0)
 	if !errors.Is(err, ErrRateLimited) {
 		t.Errorf("Generate() error = %v, want ErrRateLimited", err)
 	}
@@ -161,7 +344,7 @@ func TestGenerate_ServerError(t *testing.T) {
 	})
 	defer srv.Close()
 
-	_, err := gen.Generate(context.Background(), sampleDiff)
+	_, err := gen.Generate(context.Background(), sampleDiff, nil, nil, 0)
 	if !errors.Is(err, ErrGenerationFailed) {
 		t.Errorf("Generate() error = %v, want ErrGenerationFailed", err)
 	}
@@ -174,7 +357,7 @@ func TestGenerate_EmptyChoices(t *testing.T) {
 	})
 	defer srv.Close()
 
-	_, err := gen.Generate(context.Background(), sampleDiff)
+	_, err := gen.Generate(context.Background(), sampleDiff, nil, nil, 0)
 	if !errors.Is(err, ErrGenerationFailed) {
 		t.Errorf("Generate() error = %v, want ErrGenerationFailed", err)
 	}
@@ -187,7 +370,7 @@ func TestGenerate_BadJSON(t *testing.T) {
 	})
 	defer srv.Close()
 
-	_, err := gen.Generate(context.Background(), sampleDiff)
+	_, err := gen.Generate(context.Background(), sampleDiff, nil, nil, 0)
 	if !errors.Is(err, ErrGenerationFailed) {
 		t.Errorf("Generate() bad JSON error = %v, want ErrGenerationFailed", err)
 	}
@@ -197,7 +380,7 @@ func TestGenerate_NetworkError(t *testing.T) {
 	gen, srv := newTestGenerator(func(w http.ResponseWriter, r *http.Request) {})
 	srv.Close() // close immediately so the request fails
 
-	_, err := gen.Generate(context.Background(), sampleDiff)
+	_, err := gen.Generate(context.Background(), sampleDiff, nil, nil, 0)
 	if !errors.Is(err, ErrGenerationFailed) {
 		t.Errorf("Generate() network error = %v, want ErrGenerationFailed", err)
 	}
@@ -232,7 +415,7 @@ func TestGenerate_UserKeyHeader(t *testing.T) {
 		t.Fatalf("test setup: %v", err)
 	}
 
-	_, err := gen.Generate(context.Background(), sampleDiff)
+	_, err := gen.Generate(context.Background(), sampleDiff, nil, nil, 0)
 	if err != nil {
 		t.Fatalf("Generate() unexpected error: %v", err)
 	}

@@ -4,12 +4,7 @@ profile: coverage.out
 
 threshold:
   # Ratchet — only increase, never decrease. Update after adding tests.
-  # Lowered from 67 → 58 after the telemetry feature (v0.1.10): the feature
-  # added new command-runner functions (runCategories, runAssign, etc.) that
-  # are exempt from unit tests per the testing contract and are covered only
-  # by binary integration tests, which do not feed into coverage.out.
-  # See DECISIONS.md "Coverage threshold lowered after telemetry feature".
-  total: 58
+  total: 62
 
 exclude:
   paths:

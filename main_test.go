@@ -197,6 +197,48 @@ func TestExitCodeForwarding(t *testing.T) {
 	}
 }
 
+func TestParseGlobalGitFlags_gitDirSpaceForm(t *testing.T) {
+	dir := t.TempDir()
+	remaining, globalFlags, err := parseGlobalGitFlags([]string{"--git-dir", dir, "log"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(globalFlags) != 1 || globalFlags[0] != "--git-dir="+dir {
+		t.Errorf("globalFlags = %v, want [--git-dir=%s]", globalFlags, dir)
+	}
+	if len(remaining) != 1 || remaining[0] != "log" {
+		t.Errorf("remaining = %v, want [log]", remaining)
+	}
+}
+
+func TestParseGlobalGitFlags_workTreeSpaceForm(t *testing.T) {
+	dir := t.TempDir()
+	remaining, globalFlags, err := parseGlobalGitFlags([]string{"--work-tree", dir, "status"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(globalFlags) != 1 || globalFlags[0] != "--work-tree="+dir {
+		t.Errorf("globalFlags = %v, want [--work-tree=%s]", globalFlags, dir)
+	}
+	if len(remaining) != 1 || remaining[0] != "status" {
+		t.Errorf("remaining = %v, want [status]", remaining)
+	}
+}
+
+func TestParseGlobalGitFlags_CMissingArg(t *testing.T) {
+	_, _, err := parseGlobalGitFlags([]string{"-C"})
+	if err == nil {
+		t.Error("expected error for -C without path, got nil")
+	}
+}
+
+func TestParseGlobalGitFlags_cMissingArg(t *testing.T) {
+	_, _, err := parseGlobalGitFlags([]string{"-c"})
+	if err == nil {
+		t.Error("expected error for -c without value, got nil")
+	}
+}
+
 func TestParseGlobalGitFlags_gitDirNonexistent(t *testing.T) {
 	_, _, err := parseGlobalGitFlags([]string{"--git-dir=/nonexistent/path/that/cannot/exist"})
 	if err == nil {

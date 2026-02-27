@@ -85,13 +85,15 @@ type commitModel struct {
 	status    git.WorktreeStatus
 	gen       ai.Generator
 
-	mode         commitMode
-	message      string
-	manualInput  string
-	manualReason manualInputReason
-	retryCount   int
-	generationID int
-	spinnerFrame int
+	mode            commitMode
+	message         string
+	manualInput     string
+	manualReason    manualInputReason
+	retryCount      int
+	generationID    int
+	spinnerFrame    int
+	gistMessages    []string
+	summaryMessages []string
 
 	cursorRow    int
 	stagedOpen   bool
@@ -109,11 +111,11 @@ type commitModel struct {
 	height int
 }
 
-func doGenerate(gen ai.Generator, diff string, id int) tea.Cmd {
+func doGenerate(gen ai.Generator, diff string, gist []string, summaryPrev []string, id int, attempt int) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		msg, err := gen.Generate(ctx, diff)
+		msg, err := gen.Generate(ctx, diff, gist, summaryPrev, attempt)
 		return generateResultMsg{message: msg, err: err, generationID: id}
 	}
 }
@@ -126,7 +128,7 @@ func spinnerTick() tea.Cmd {
 
 func (m commitModel) Init() tea.Cmd {
 	return tea.Batch(
-		doGenerate(m.gen, m.diff, m.generationID),
+		doGenerate(m.gen, m.diff, m.gistMessages, m.summaryMessages, m.generationID, m.regenerations),
 		spinnerTick(),
 	)
 }
@@ -168,7 +170,7 @@ func (m commitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.retryCount++
 		if m.retryCount < maxGenerationRetries {
 			m.generationID++
-			return m, doGenerate(m.gen, m.diff, m.generationID)
+			return m, doGenerate(m.gen, m.diff, m.gistMessages, m.summaryMessages, m.generationID, m.regenerations)
 		}
 		m.mode = modeManualInput
 		m.manualReason = reasonGenerationFailed
@@ -215,9 +217,17 @@ func (m commitModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.generationID++
 			m.retryCount = 0
 			m.mode = modeGenerating
-			m.regenerations++ // user-initiated regeneration only (not internal retry-on-failure)
+			m.regenerations++ // user 'r' presses only
+			if m.summaryMessages != nil {
+				m.summaryMessages = append(m.summaryMessages, m.message)
+			} else {
+				m.gistMessages = append(m.gistMessages, m.message)
+				if ai.IsDiffExhausted(m.diff, m.regenerations) {
+					m.summaryMessages = []string{} // nil→non-nil enters summary phase
+				}
+			}
 			return m, tea.Batch(
-				doGenerate(m.gen, m.diff, m.generationID),
+				doGenerate(m.gen, m.diff, m.gistMessages, m.summaryMessages, m.generationID, m.regenerations),
 				spinnerTick(),
 			)
 

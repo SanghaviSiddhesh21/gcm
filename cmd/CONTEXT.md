@@ -92,6 +92,19 @@ All passthrough goes through `passthroughGit` in `passthrough_unix.go`/`passthro
 
 `core.sshCommand` and `credential.helper` are deliberately **not** denied (legitimate CI/agent use).
 
+## Testing
+
+`main_test.go` (root package) — unit tests for `parseGlobalGitFlags` and `exitCode`:
+- `-C <path>`: changes CWD, not stored in globalFlags
+- `-c key=val`: stored in globalFlags, forwarded to git
+- `--git-dir=<path>` and `--git-dir <path>` (space form): stored, validated to exist
+- `--work-tree=<path>` and `--work-tree <path>` (space form): stored, validated to exist
+- Mixed flags: `-C` consumed, `-c` forwarded
+- No flags: remaining args unchanged
+- Error paths: `-C` missing arg, `-c` missing arg, `-c` malformed (no `=`), nonexistent `--git-dir`, nonexistent `--work-tree`
+- Security denylist: denied keys (`core.fsmonitor`, `core.editor`, `alias.*`, `filter.*.clean`) return error; allowed keys (`core.sshCommand`, `credential.helper`) pass
+- `exitCode(nil)` → 0, `exitCode(non-exec error)` → 1, real git exit code forwarded (128 for non-repo)
+
 ## Gotchas
 
 - The `version` variable in `root.go` defaults to `"dev"` and is overwritten by goreleaser at build time.
