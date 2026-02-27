@@ -386,6 +386,14 @@ func TestGenerate_NetworkError(t *testing.T) {
 	}
 }
 
+func TestGenerate_InvalidURL(t *testing.T) {
+	gen := &groqGenerator{url: "://invalid"}
+	_, err := gen.Generate(context.Background(), sampleDiff, nil, nil, 0)
+	if !errors.Is(err, ErrGenerationFailed) {
+		t.Errorf("Generate() invalid URL = %v, want ErrGenerationFailed", err)
+	}
+}
+
 func TestNew(t *testing.T) {
 	g := New()
 	if g == nil {
