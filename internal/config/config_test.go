@@ -125,6 +125,8 @@ func TestGetOrCreateInstallID_DisabledByCI(t *testing.T) {
 
 func TestGetOrCreateInstallID_GeneratesAndPersists(t *testing.T) {
 	withTempHome(t)
+	t.Setenv("CI", "")
+	t.Setenv("GITHUB_ACTIONS", "")
 	id1, err := GetOrCreateInstallID()
 	if err != nil {
 		t.Fatalf("unexpected error on first call: %v", err)
@@ -145,6 +147,8 @@ func TestGetOrCreateInstallID_GeneratesAndPersists(t *testing.T) {
 
 func TestGetOrCreateInstallID_DoesNotAffectAPIKey(t *testing.T) {
 	withTempHome(t)
+	t.Setenv("CI", "")
+	t.Setenv("GITHUB_ACTIONS", "")
 	_ = SetAPIKey("gsk_test123")
 	configOnce = sync.Once{}
 
