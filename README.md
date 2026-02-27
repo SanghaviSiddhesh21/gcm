@@ -13,6 +13,13 @@ brew tap SanghaviSiddhesh21/homebrew-tap
 brew install gcm
 ```
 
+### Scoop (Windows)
+
+```powershell
+scoop bucket add siddhesh https://github.com/SanghaviSiddhesh21/scoop-bucket
+scoop install gcm
+```
+
 ### Download Binary
 
 Download the latest binary for your platform from [GitHub Releases](https://github.com/SanghaviSiddhesh21/gcm/releases).
@@ -29,10 +36,18 @@ Download the latest binary for your platform from [GitHub Releases](https://gith
 
 Requires Go 1.24+.
 
+**macOS / Linux:**
 ```bash
 git clone https://github.com/SanghaviSiddhesh21/gcm.git
 cd gcm
 go build -o gcm .
+```
+
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/SanghaviSiddhesh21/gcm.git
+cd gcm
+go build -o gcm.exe .
 ```
 
 ---
