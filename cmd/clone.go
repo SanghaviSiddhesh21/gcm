@@ -28,7 +28,6 @@ var cloneCmd = &cobra.Command{
 			return err
 		}
 
-		// Determine target directory and initialize the store.
 		targetDir := cloneTargetDir(args)
 		gitDir, err := git.GetGitDirAt(targetDir)
 		if err != nil {

@@ -217,13 +217,13 @@ func (m commitModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.generationID++
 			m.retryCount = 0
 			m.mode = modeGenerating
-			m.regenerations++ // user 'r' presses only
+			m.regenerations++
 			if m.summaryMessages != nil {
 				m.summaryMessages = append(m.summaryMessages, m.message)
 			} else {
 				m.gistMessages = append(m.gistMessages, m.message)
 				if ai.IsDiffExhausted(m.diff, m.regenerations) {
-					m.summaryMessages = []string{} // nil→non-nil enters summary phase
+					m.summaryMessages = []string{}
 				}
 			}
 			return m, tea.Batch(

@@ -129,12 +129,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 
 			case " ", "right":
-				// Toggle collapse if on category
 				if m.cursor < len(m.items) && m.items[m.cursor].kind == itemCategory {
 					cat := m.items[m.cursor].label
 					m.collapsed[cat] = !m.collapsed[cat]
 					m.items = m.rebuildItems()
-					// Clamp cursor
 					if m.cursor >= len(m.items) {
 						m.cursor = len(m.items) - 1
 					}
@@ -180,20 +178,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Store target branch from current item
 		if m.cursor >= len(m.items) {
 			return m, nil
 		}
 		target := m.items[m.cursor].label
 
 		if msg.status.IsDirty() {
-			// Show confirmation prompt
 			m.mode = modeConfirm
 			m.confirmTarget = target
 			m.confirmStatus = msg.status
 			m.errMsg = ""
 		} else {
-			// Clean worktree — proceed directly
 			return m, doCheckout(m.gitDir, target)
 		}
 		return m, nil

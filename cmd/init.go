@@ -27,8 +27,6 @@ All arguments are forwarded verbatim to git init.`,
 			return err
 		}
 
-		// Determine target directory from positional args.
-		// Known init flags that consume the next token as a value.
 		knownInitValueFlags := map[string]bool{
 			"--template": true, "--separate-git-dir": true,
 			"-b": true, "--initial-branch": true,
@@ -50,13 +48,11 @@ All arguments are forwarded verbatim to git init.`,
 			}
 		}
 
-		// Locate the git dir in the target directory.
 		gitDir, err := git.GetGitDirAt(targetDir)
 		if err != nil {
 			return fmt.Errorf("gcm init: could not locate git dir: %w", err)
 		}
 
-		// Create the store if not already present.
 		if _, err := store.LoadOrCreate(gitDir); err != nil {
 			return fmt.Errorf("gcm init: failed to initialize store: %w", err)
 		}
