@@ -12,6 +12,10 @@ import (
 var gcmBin string
 
 func TestMain(m *testing.M) {
+	// Suppress telemetry in all integration tests — the real binary must not
+	// make network calls or generate install IDs during go test.
+	os.Setenv("CI", "1") //nolint:errcheck
+
 	dir, err := os.MkdirTemp("", "gcm-test-bin-*")
 	if err != nil {
 		log.Fatalf("MkdirTemp: %v", err)

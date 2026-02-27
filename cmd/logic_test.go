@@ -437,3 +437,96 @@ func TestSortedCategories_othersNewestFirst(t *testing.T) {
 		t.Errorf("expected [beta gamma alpha] by newest commit, got %v", result)
 	}
 }
+
+// ── sortView ──────────────────────────────────────────────────────────────────
+
+func TestSortView_currentCategoryFirst(t *testing.T) {
+	now := time.Now()
+	branchMap := map[string][]string{
+		"feature": {"feat-a"},
+		"bugfix":  {"fix-1"},
+	}
+	times := map[string]time.Time{
+		"feat-a": now.Add(-2 * time.Hour),
+		"fix-1":  now.Add(-1 * time.Hour), // newer, but feature is current
+	}
+	cats, _ := sortView([]string{"feature", "bugfix"}, branchMap, "feat-a", times)
+	if cats[0] != "feature" {
+		t.Errorf("sortView: expected current category 'feature' first, got %v", cats)
+	}
+}
+
+func TestSortView_currentBranchFirstWithinCategory(t *testing.T) {
+	now := time.Now()
+	branchMap := map[string][]string{
+		"feature": {"feat-a", "feat-b", "feat-c"},
+	}
+	times := map[string]time.Time{
+		"feat-a": now.Add(-3 * time.Hour),
+		"feat-b": now.Add(-1 * time.Hour),
+		"feat-c": now.Add(-2 * time.Hour), // current
+	}
+	_, sorted := sortView([]string{"feature"}, branchMap, "feat-c", times)
+	if sorted["feature"][0] != "feat-c" {
+		t.Errorf("sortView: expected current branch 'feat-c' first in category, got %v", sorted["feature"])
+	}
+}
+
+// ── cloneTargetDir ────────────────────────────────────────────────────────────
+
+func TestCloneTargetDir(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			"explicit dir",
+			[]string{"https://github.com/user/repo.git", "/tmp/mydir"},
+			"/tmp/mydir",
+		},
+		{
+			"URL only — infer from basename",
+			[]string{"https://github.com/user/repo.git"},
+			"repo",
+		},
+		{
+			"no args",
+			[]string{},
+			".",
+		},
+		{
+			"value-bearing flag skips its value",
+			[]string{"-b", "main", "https://github.com/user/repo.git"},
+			"repo",
+		},
+		{
+			"long value-bearing flag skips its value",
+			[]string{"--branch", "main", "https://github.com/user/repo.git", "mydir"},
+			"mydir",
+		},
+		{
+			"-- stops flag parsing, next token is positional",
+			[]string{"--", "https://github.com/user/repo.git", "mydir"},
+			".",
+		},
+		{
+			"boolean flag ignored, positional collected",
+			[]string{"--no-tags", "https://github.com/user/repo.git", "dest"},
+			"dest",
+		},
+		{
+			"equals-form flag not treated as value-bearer",
+			[]string{"--depth=1", "https://github.com/user/repo.git"},
+			"repo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := cloneTargetDir(tt.args); got != tt.want {
+				t.Errorf("cloneTargetDir(%v) = %q, want %q", tt.args, got, tt.want)
+			}
+		})
+	}
+}

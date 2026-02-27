@@ -9,13 +9,14 @@ A CLI tool that organizes local git branches into user-defined categories. Metad
 
 | Path | Responsibility |
 |---|---|
-| `main.go` | Entry point — strips global git flags (`-C`, `--git-dir`, `--work-tree`, `-c`), delegates to `cmd.Execute()` |
+| `main.go` | Entry point — strips global git flags, initializes telemetry, delegates to `run(tel) int`, flushes telemetry, then `os.Exit` |
 | `cmd/` | Cobra command definitions (one file per subcommand), view sorting logic, and passthrough security infrastructure (`passthrough.go`, `passthrough_unix.go`, `passthrough_windows.go`) |
 | `internal/git/` | All interactions with the `git` binary — branch listing, sync status, checkout, worktree status |
 | `internal/store/` | JSON persistence layer — load/save/validate the `.git/gcm.json` store |
 | `internal/ui/` | Terminal output — static tree rendering (`ui.go`), view TUI (`tui_view.go`), and commit TUI (`tui_commit.go`) |
 | `internal/ai/` | AI commit message generation — sends staged diff to Cloudflare Worker proxy, returns conventional commit message |
-| `internal/config/` | User config persistence — reads and writes `~/.gcm/config.json` (API key storage) |
+| `internal/config/` | User config persistence — reads and writes `~/.gcm/config.json` (API key + anonymous install ID) |
+| `internal/telemetry/` | Anonymous usage telemetry — in-memory event queue, 500ms non-blocking flush to Cloudflare Worker → PostHog |
 
 ## Key Dependencies
 
@@ -26,6 +27,7 @@ A CLI tool that organizes local git branches into user-defined categories. Metad
 | `charmbracelet/bubbletea` | Interactive TUI for `gcm view` when stdout is a terminal |
 | `charmbracelet/lipgloss` | Styling within the Bubbletea TUI |
 | `mattn/go-isatty` | Detect whether stdout is a terminal to choose TUI vs static output |
+| `google/uuid` | Generate RFC 4122 UUIDv4 anonymous install IDs for telemetry |
 
 ## Build, Run, Test
 
@@ -48,6 +50,7 @@ Version is injected at build time via `-ldflags -X github.com/siddhesh/gcm/cmd.v
 - [internal/ui/CONTEXT.md](internal/ui/CONTEXT.md) — terminal rendering (static + TUI)
 - [internal/ai/CONTEXT.md](internal/ai/CONTEXT.md) — AI generation layer
 - [internal/config/CONTEXT.md](internal/config/CONTEXT.md) — user config (API key storage)
+- [internal/telemetry/CONTEXT.md](internal/telemetry/CONTEXT.md) — anonymous usage telemetry
 - [cmd/CONTEXT.md](cmd/CONTEXT.md) — CLI commands and view sorting
 
 ## Testing Contract

@@ -1,4 +1,4 @@
-.PHONY: test test-verbose test-coverage coverage-check build clean help
+.PHONY: test test-verbose test-coverage coverage-check build clean help wrangler-deploy wrangler-tail wrangler-secret
 
 # Packages included in coverage measurement.
 # internal/ui is excluded — TUI code requires a real terminal and cannot be coverage-tested.
@@ -43,3 +43,15 @@ clean:
 ## lint: Run linter (requires golangci-lint)
 lint:
 	@golangci-lint run ./...
+
+## wrangler-deploy: Run after changing worker/telemetry/src/index.js to push updates to Cloudflare
+wrangler-deploy:
+	@cd worker/telemetry && npx wrangler deploy
+
+## wrangler-tail: Stream live Worker logs; run while testing gcm commands to verify events are received
+wrangler-tail:
+	@cd worker/telemetry && npx wrangler tail
+
+## wrangler-secret: Run to set or rotate the PostHog API key stored as a Worker secret (interactive prompt)
+wrangler-secret:
+	@cd worker/telemetry && npx wrangler secret put POSTHOG_API_KEY

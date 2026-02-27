@@ -1,10 +1,16 @@
 package cmd
 
 import (
+	"github.com/siddhesh/gcm/internal/telemetry"
 	"github.com/spf13/cobra"
 )
 
 var version = "dev"
+
+// cmdTel is the package-level Recorder used by all cobra commands.
+// Set to a real Recorder by Execute(tel); defaults to noop so it is
+// never nil even if Execute is called without telemetry.
+var cmdTel telemetry.Recorder = telemetry.Noop()
 
 var rootCmd = &cobra.Command{
 	Use:   "gcm",
@@ -42,7 +48,7 @@ Git passthrough (examples):
 	SilenceErrors:      true,
 	DisableFlagParsing: true,
 	Args:               cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) (err error) {
 		// Intercept --version / -v before passthrough (DisableFlagParsing swallows it).
 		if len(args) > 0 && (args[0] == "--version" || args[0] == "-v") {
 			cmd.Println("gcm version " + version)
@@ -59,13 +65,20 @@ Git passthrough (examples):
 			return cmd.Help()
 		}
 
+		defer func() { cmdTel.Record("cmd_git_passthrough", map[string]any{"success": err == nil}) }()
 		return passthroughGit(globalGitFlags, args)
 	},
 }
 
-func Execute() error {
+// Execute wires up the telemetry recorder for all commands and runs the
+// cobra command tree. main.go is the only caller.
+func Execute(tel telemetry.Recorder) error {
+	cmdTel = tel
 	return rootCmd.Execute()
 }
+
+// Version returns the version string injected at build time via ldflags.
+func Version() string { return version }
 
 func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true

@@ -6,7 +6,7 @@ Cobra command definitions. One file per subcommand plus `root.go` for the root c
 
 | File | Command | Notes |
 |---|---|---|
-| `root.go` | `gcm` | Root command. `DisableFlagParsing: true`; intercepts `--version`/`-v` and `--help`/`-h`, then passes unknown subcommands to git. Version injected via ldflags. |
+| `root.go` | `gcm` | Root command. `DisableFlagParsing: true`; intercepts `--version`/`-v` and `--help`/`-h`, then passes unknown subcommands to git. Version injected via ldflags. Exports `Execute(tel)` and `Version()`. Holds package-level `cmdTel telemetry.Recorder`. |
 | `passthrough.go` | — | Shared security infrastructure: `globalGitFlags`, `checkHelp`, `IsDeniedConfigKey`, `checkPassthroughArgs`, `buildPassthroughEnv`, `IsSecurityDenied`. |
 | `passthrough_unix.go` | — | Unix `passthroughGit`: plain `c.Run()` (no `Setpgid`; git stays in terminal's foreground process group so pagers and editors work). `passthroughGitHelp` injects `--no-man` in non-TTY. |
 | `passthrough_windows.go` | — | Windows `passthroughGit`: plain `c.Run()`. |
@@ -40,6 +40,33 @@ Every command follows the same structure:
 5. Print a success message
 
 Error handling: errors are both printed to stderr and returned. Cobra's `SilenceUsage` and `SilenceErrors` are set on the root command, so error display is handled by `main.go`.
+
+## Telemetry instrumentation pattern
+
+Commands that are native to gcm delegate from `RunE` to a named helper function:
+
+```go
+RunE: func(cmd *cobra.Command, args []string) error {
+    return runCreate(cmdTel, args)
+}
+
+func runCreate(tel telemetry.Recorder, args []string) (err error) {
+    defer func() { tel.Record("cmd_create", map[string]any{"success": err == nil}) }()
+    // ...existing logic...
+}
+```
+
+Key details:
+- The helper uses a named return `(err error)` so the deferred `Record` closure captures the final error value.
+- `cmdTel` is a package-level `telemetry.Recorder` set by `Execute(tel)`. It defaults to `telemetry.Noop()`.
+- `rootCmd.RunE` records `cmd_git_passthrough` for unknown subcommands forwarded to git.
+- Pure passthrough subcommands (`gcm branch`, `gcm config`, named passthrough in `commitCmd`) are not instrumented — they go through `passthroughGit` directly, not through `rootCmd.RunE`.
+
+## Exported functions from `root.go`
+
+- `Execute(tel telemetry.Recorder) error` — sets `cmdTel = tel` and runs the Cobra command tree.
+- `Version() string` — returns the version string (injected at build time via ldflags; defaults to `"dev"`).
+- `IsSecurityDenied(err error) bool` — true if `err` wraps `ErrSecurityDenied`.
 
 ## Passthrough pattern
 

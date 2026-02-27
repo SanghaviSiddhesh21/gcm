@@ -5,13 +5,23 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
+
+	"github.com/google/uuid"
 )
 
 var ErrNotSet = errors.New("not set")
 
 type file struct {
-	APIKey string `json:"api_key,omitempty"`
+	APIKey    string `json:"api_key,omitempty"`
+	InstallID string `json:"install_id,omitempty"`
 }
+
+var (
+	configOnce sync.Once
+	cachedFile file
+	cachedErr  error
+)
 
 func configPath() (string, error) {
 	home, err := os.UserHomeDir()
@@ -21,7 +31,7 @@ func configPath() (string, error) {
 	return filepath.Join(home, ".gcm", "config.json"), nil
 }
 
-func load() (file, error) {
+func loadFromDisk() (file, error) {
 	path, err := configPath()
 	if err != nil {
 		return file{}, err
@@ -37,6 +47,13 @@ func load() (file, error) {
 	return f, json.Unmarshal(data, &f)
 }
 
+func load() (file, error) {
+	configOnce.Do(func() {
+		cachedFile, cachedErr = loadFromDisk()
+	})
+	return cachedFile, cachedErr
+}
+
 func save(f file) error {
 	path, err := configPath()
 	if err != nil {
@@ -49,7 +66,38 @@ func save(f file) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0600)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// isDisabledEnv reports whether telemetry should be suppressed based on
+// environment variables. Intentionally duplicated from internal/telemetry
+// to avoid a circular import.
+func isDisabledEnv() bool {
+	return os.Getenv("CI") != "" ||
+		os.Getenv("GITHUB_ACTIONS") != ""
+}
+
+// GetOrCreateInstallID returns the stored anonymous install ID, generating
+// one if absent. Returns ("", nil) in CI/automation environments — callers
+// pass the empty string to telemetry.New(), which returns a noop recorder.
+func GetOrCreateInstallID() (string, error) {
+	if isDisabledEnv() {
+		return "", nil
+	}
+	f, err := load()
+	if err != nil {
+		return "", err
+	}
+	if f.InstallID != "" {
+		return f.InstallID, nil
+	}
+	f.InstallID = uuid.New().String()
+	cachedFile = f // keep in-process cache consistent
+	return f.InstallID, save(f)
 }
 
 func GetAPIKey() (string, error) {
@@ -69,6 +117,7 @@ func SetAPIKey(key string) error {
 		return err
 	}
 	f.APIKey = key
+	cachedFile = f // write-through so in-process reads see the new key immediately
 	return save(f)
 }
 
@@ -78,5 +127,6 @@ func UnsetAPIKey() error {
 		return err
 	}
 	f.APIKey = ""
+	cachedFile = f // write-through so in-process reads see the cleared key immediately
 	return save(f)
 }

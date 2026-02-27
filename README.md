@@ -242,6 +242,12 @@ gcm stores all data in `.git/gcm.json`:
 
 ---
 
+## Telemetry
+
+`gcm` collects anonymous usage data (command name, success/failure, OS, architecture, version) to understand which features are used and focus development effort. No branch names, category names, commit messages, file paths, or personally identifiable information are ever collected.
+
+---
+
 ## License
 
 MIT
