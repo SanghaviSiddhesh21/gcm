@@ -70,8 +70,8 @@
 1. `cmd/commit.go` calls `git.GetStagedChanges()` — errors if nothing staged
 2. `cmd/commit.go` calls `git.GetWorktreeStatus()` for the staged/unstaged file lists shown in the TUI
 3. `ui.RunCommitTUI()` launches a Bubbletea program, receives `ai.New()` as the generator
-4. TUI calls `gen.Generate(ctx, diff)` — `prepareDiff` filters and truncates the diff, then sends it to the Cloudflare Worker with optional `X-User-Api-Key` header
-5. User accepts / edits / regenerates the message in the TUI
+4. TUI calls `gen.Generate(ctx, diff, gist, summaryPrev, attempt)` — `prepareDiff` filters the diff and returns the attempt-th 6000-char window; prior window messages are passed as `gist`; once `ai.IsDiffExhausted` returns true the TUI switches to summary phase (`summaryPrev != nil`)
+5. User accepts / edits / regenerates the message in the TUI; each 'r' press advances the window or accumulates summary context
 6. TUI returns a `CommitResult` (message, outcome, regeneration count) → `cmd` calls `git.Commit(repoInfo.GitDir, message)`
 7. `cmd` calls `cmdTel.Record("cmd_commit_ai", ...)` with outcome and regenerations count
 

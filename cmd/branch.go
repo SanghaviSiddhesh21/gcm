@@ -67,7 +67,6 @@ func runBranchRename(args []string, oldBranch, newBranch string) error {
 }
 
 func runBranchDelete(args []string, deletedBranches []string) error {
-	// Determine whether to use -d (safe delete) or -D (force delete).
 	deleteFlag := "-d"
 	for _, a := range args {
 		if a == "-D" {
@@ -101,7 +100,6 @@ func runBranchDelete(args []string, deletedBranches []string) error {
 		}
 	}
 
-	// Update store once for all successful deletions.
 	if storeAvailable && len(successfullyDeleted) > 0 {
 		for _, branch := range successfullyDeleted {
 			s.UnassignBranch(branch)

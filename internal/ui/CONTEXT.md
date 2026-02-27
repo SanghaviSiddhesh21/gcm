@@ -30,6 +30,18 @@ Entry point: `RunCommitTUI(_ string, diff, status, gen) (CommitResult, error)` �
 
 `countDiffLines(diff)` counts only `+`/`-` lines, excluding `+++`/`---` file headers and `@@` hunk headers. Used to trigger the large-diff warning.
 
+### Two-phase regeneration ('r' keybind)
+
+`commitModel` tracks two fields for regeneration state:
+- `gistMessages []string` — accumulates one commit message per window during the window phase; frozen once the diff is exhausted.
+- `summaryMessages []string` — nil during the window phase; set to `[]string{}` (non-nil sentinel) on first exhaustion; grows with each subsequent summary attempt.
+
+**Window phase** (`summaryMessages == nil`, diff not exhausted): each 'r' appends the current message to `gistMessages`, advances to the next 6000-char diff window, and passes all gist messages as prior context to the AI ("Previous attempts generated…").
+
+**Summary phase** (`summaryMessages != nil`, entered when `ai.IsDiffExhausted` returns true): `gistMessages` is frozen. Each 'r' appends the current message to `summaryMessages` and sends the full gist as the "gist of the changes" prompt. Subsequent presses include the prior summaries with "however, it/they have not captured the complete essence".
+
+Internal retries on transient errors reuse the same phase context (`gistMessages` + `summaryMessages`) without advancing either slice.
+
 ## Exposed to `cmd`
 
 - `RunTUI` — Entry point for the interactive view. Returns the name of the checked-out branch (empty string if none).

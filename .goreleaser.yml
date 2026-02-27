@@ -41,3 +41,14 @@ brews:
     homepage: https://github.com/SanghaviSiddhesh21/gcm
     description: "Git Category Manager — organize branches without renaming them"
     license: MIT
+
+scoops:
+  - repository:
+      owner: SanghaviSiddhesh21
+      name: scoop-bucket
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    homepage: https://github.com/SanghaviSiddhesh21/gcm
+    description: "Git Category Manager — organize branches without renaming them"
+    license: MIT

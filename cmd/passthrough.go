@@ -80,7 +80,6 @@ var fetchFamilySubcmds = map[string]bool{
 // checkPassthroughArgs validates args before forwarding to git.
 // Returns a non-nil error (exit code 2) if a denied flag or URL is detected.
 func checkPassthroughArgs(args []string) error {
-	// Determine subcommand for context-sensitive checks.
 	subcmd := ""
 	for _, a := range args {
 		if !strings.HasPrefix(a, "-") {
