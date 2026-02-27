@@ -115,6 +115,7 @@ func TestCheckPassthroughArgs_allowed(t *testing.T) {
 		{"clone", "https://github.com/foo/bar"},
 		{"-c", "user.name=Test", "status"},
 		{"-c", "credential.helper=osxkeychain", "fetch"},
+		{"-cuser.name=Test", "status"},
 	}
 	for _, args := range cases {
 		if err := checkPassthroughArgs(args); err != nil {
@@ -139,6 +140,7 @@ func TestCheckPassthroughArgs_denied(t *testing.T) {
 		{"denied -c key", []string{"-c", "core.fsmonitor=/tmp/evil", "status"}},
 		{"denied -c inline", []string{"-ccore.editor=/tmp/evil", "status"}},
 		{"malformed -c", []string{"-c", "nokeyequals", "status"}},
+		{"malformed -c inline", []string{"-cnoequalssign", "status"}},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
