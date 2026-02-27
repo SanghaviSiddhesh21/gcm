@@ -10,8 +10,14 @@ import (
 	"syscall"
 
 	"github.com/siddhesh/gcm/cmd"
+	"github.com/siddhesh/gcm/internal/config"
 	"github.com/siddhesh/gcm/internal/git"
+	"github.com/siddhesh/gcm/internal/telemetry"
 )
+
+// telemetryWorkerURL is the Cloudflare Worker endpoint that validates and
+// forwards telemetry events to PostHog. Not a secret — safe to ship in binary.
+const telemetryWorkerURL = "https://gcm-telemetry.sanghavisiddhesh21.workers.dev"
 
 func main() {
 	remaining, globalFlags, err := parseGlobalGitFlags(os.Args[1:])
@@ -23,10 +29,19 @@ func main() {
 	cmd.SetGlobalGitFlags(globalFlags)
 	git.SetGlobalFlags(globalFlags)
 
-	if err := cmd.Execute(); err != nil {
+	id, _ := config.GetOrCreateInstallID()
+	tel := telemetry.New(id, telemetryWorkerURL, cmd.Version())
+
+	code := run(tel)
+	tel.Flush()
+	os.Exit(code)
+}
+
+func run(tel telemetry.Recorder) int {
+	if err := cmd.Execute(tel); err != nil {
 		if cmd.IsSecurityDenied(err) {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			os.Exit(2)
+			return 2
 		}
 		// For passthrough errors (exec.ExitError), git already printed its own
 		// error message — just forward the exit code without adding a second line.
@@ -34,8 +49,9 @@ func main() {
 		if !errors.As(err, &exitErr) {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		}
-		os.Exit(exitCode(err))
+		return exitCode(err)
 	}
+	return 0
 }
 
 // parseGlobalGitFlags strips known git global flags from args, applies -C via os.Chdir,

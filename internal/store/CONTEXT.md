@@ -26,7 +26,7 @@ JSON persistence layer for the `.git/gcm.json` file. Owns the data model, valida
 
 - The store has no migration logic. If the schema changes, old `gcm.json` files will fail to parse.
 - `ValidateCategoryName` uses a package-level compiled regex `categoryNameRe` (not per-call compilation).
-- Category names reject underscores despite the README claiming they're allowed. This is a known doc-code mismatch.
+- Category names reject underscores (`^[a-zA-Z0-9-]+$`). The README correctly reflects this — only hyphens are allowed as separators.
 
 ## Testing
 

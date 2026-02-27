@@ -5,8 +5,8 @@
 ```
                          ┌──────────┐
                          │  main.go │ strips global git flags (-C, --git-dir, -c ...)
-                         └────┬─────┘ distributes to cmd.SetGlobalGitFlags + git.SetGlobalFlags
-                              │ cmd.Execute()
+                         └────┬─────┘ inits telemetry, calls run(tel), flushes, os.Exit
+                              │ cmd.Execute(tel)
                               ▼
                          ┌──────────┐
                          │   cmd/   │  Cobra commands
@@ -23,9 +23,9 @@
      ┌─────────────┐  ┌────────────┐  ┌──────────┐  ┌──────────────┐
      │ internal/git│  │ internal/  │  │ internal │  │ internal/    │
      │             │  │   store    │  │   /ui    │  │   config     │
-     └──────┬──────┘  └─────┬──────┘  └─────┬────┘  └──────────────┘
-            │               │               │               ▲
-            ▼               ▼               │               │
+     └──────┬──────┘  └─────┬──────┘  └─────┬────┘  └──────┬───────┘
+            │               │               │               │
+            ▼               ▼               │               ▼
        git binary     .git/gcm.json         │        ┌──────────────┐
                                             │        │ internal/ai  │
                                             └───────►│              │
@@ -33,7 +33,11 @@
                                                             │
                                                             ▼
                                                    Cloudflare Worker
-                                                      → Groq API
+                                                   → Groq API / PostHog
+
+  main.go ──► internal/config (GetOrCreateInstallID)
+          ──► internal/telemetry (New, Record, Flush)
+  cmd/    ──► internal/telemetry (cmdTel.Record per command)
 ```
 
 ## Data Flow
@@ -68,7 +72,8 @@
 3. `ui.RunCommitTUI()` launches a Bubbletea program, receives `ai.New()` as the generator
 4. TUI calls `gen.Generate(ctx, diff)` — `prepareDiff` filters and truncates the diff, then sends it to the Cloudflare Worker with optional `X-User-Api-Key` header
 5. User accepts / edits / regenerates the message in the TUI
-6. TUI returns the final message string → `cmd` calls `git.Commit(repoInfo.GitDir, message)`
+6. TUI returns a `CommitResult` (message, outcome, regeneration count) → `cmd` calls `git.Commit(repoInfo.GitDir, message)`
+7. `cmd` calls `cmdTel.Record("cmd_commit_ai", ...)` with outcome and regenerations count
 
 ### Branch checkout (TUI only)
 
@@ -81,16 +86,19 @@
 ## Package Dependencies
 
 ```
-cmd     ──→  internal/git     (repo info, branch operations, staged diff, commit)
-cmd     ──→  internal/store   (load/save/mutate state)
-cmd     ──→  internal/ui      (rendering)
-cmd     ──→  internal/ai      (commit message generation)
-cmd     ──→  internal/config  (API key management)
-ui      ──→  internal/git     (checkout, worktree status — TUI only)
-ai      ──→  internal/config  (reads API key for X-User-Api-Key header)
+main          ──→  internal/config    (GetOrCreateInstallID)
+main          ──→  internal/telemetry (New, Flush)
+cmd           ──→  internal/git       (repo info, branch operations, staged diff, commit)
+cmd           ──→  internal/store     (load/save/mutate state)
+cmd           ──→  internal/ui        (rendering)
+cmd           ──→  internal/ai        (commit message generation)
+cmd           ──→  internal/config    (API key management)
+cmd           ──→  internal/telemetry (Record per command via cmdTel)
+ui            ──→  internal/git       (checkout, worktree status — TUI only)
+ai            ──→  internal/config    (reads API key for X-User-Api-Key header)
 ```
 
-`internal/store` and `internal/git` have no dependencies on each other. `internal/ui` depends on `internal/git` only for the TUI's checkout and dirty-worktree check — the static renderer has no git dependency. `internal/ai` depends on `internal/config` to read the optional user API key.
+`internal/store` and `internal/git` have no dependencies on each other. `internal/ui` depends on `internal/git` only for the TUI's checkout and dirty-worktree check — the static renderer has no git dependency. `internal/ai` depends on `internal/config` to read the optional user API key. `internal/telemetry` has no dependencies on other internal packages (it duplicates the `isDisabledEnv()` check from `internal/config` to avoid a circular import).
 
 ## Boundaries
 
@@ -98,7 +106,8 @@ ai      ──→  internal/config  (reads API key for X-User-Api-Key header)
 - **persistence boundary:** All file I/O for `gcm.json` goes through `internal/store`. The `cmd` layer never reads or writes the file directly.
 - **display boundary:** All terminal output formatting lives in `internal/ui`. The `cmd` layer only calls `fmt.Printf` for simple success messages and `fmt.Fprintf(os.Stderr, ...)` for errors.
 - **config boundary:** All reads and writes of `~/.gcm/config.json` go through `internal/config`. No other package touches that file.
-- **AI boundary:** All HTTP calls to the Cloudflare Worker go through `internal/ai`. The TUI interacts only via the `Generator` interface — it never makes HTTP calls directly.
+- **AI boundary:** All HTTP calls to the Cloudflare Worker (AI generation) go through `internal/ai`. The TUI interacts only via the `Generator` interface — it never makes HTTP calls directly.
+- **telemetry boundary:** All event recording and flushing goes through `internal/telemetry`. The `cmd` layer calls `cmdTel.Record(...)` — it never constructs HTTP requests. `main.go` calls `tel.Flush()` before `os.Exit`. The `Recorder` interface means any caller can hold a `noop{}` if telemetry is disabled.
 
 ## Store Schema
 

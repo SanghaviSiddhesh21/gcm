@@ -9,6 +9,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/siddhesh/gcm/internal/git"
 	"github.com/siddhesh/gcm/internal/store"
+	"github.com/siddhesh/gcm/internal/telemetry"
 	"github.com/siddhesh/gcm/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -41,101 +42,108 @@ Note: status labels reflect your last fetch. To get up-to-date information, run:
 Note: branches whose remote was deleted will show as [Local] after git fetch --prune.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		repoInfo, err := git.GetRepoInfo()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			return err
-		}
-
-		s, err := store.LoadOrCreate(repoInfo.GitDir)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			return err
-		}
-
-		allBranches, err := git.ListBranches(repoInfo.GitDir)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			return err
-		}
-
-		currentBranch, err := git.CurrentBranch(repoInfo.GitDir)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			return err
-		}
-
-		var filterCategory string
-		if len(args) > 0 {
-			filterCategory = args[0]
-			if !s.CategoryExists(filterCategory) {
-				ui.PrintError(fmt.Sprintf("category '%s' not found", filterCategory))
-				return fmt.Errorf("category not found: %s", filterCategory)
-			}
-		}
-
-		branchMap := make(map[string][]string)
-		var categoryNames []string
-
-		for _, cat := range s.Categories {
-			if filterCategory != "" && cat.Name != filterCategory {
-				continue
-			}
-
-			branches, err := s.BranchesInCategory(cat.Name, allBranches)
-			if err != nil {
-				ui.PrintError(err.Error())
-				return err
-			}
-
-			branchMap[cat.Name] = branches
-			categoryNames = append(categoryNames, cat.Name)
-		}
-
-		remoteBranches, err := git.ListRemoteBranches(repoInfo.GitDir)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			return err
-		}
-		remoteSet := make(map[string]bool, len(remoteBranches))
-		for _, b := range remoteBranches {
-			remoteSet[b] = true
-		}
-
-		branchTags := make(map[string]string)
-		for _, branch := range allBranches {
-			if !remoteSet[branch] {
-				branchTags[branch] = "[Local]"
-				continue
-			}
-			ahead, behind, err := git.SyncStatus(repoInfo.GitDir, branch)
-			if err != nil {
-				branchTags[branch] = "[Remote] ?"
-				continue
-			}
-			branchTags[branch] = formatSyncTag(ahead, behind)
-		}
-
-		branchTimes, err := git.BranchCommitTimes(repoInfo.GitDir)
-		if err != nil {
-			branchTimes = make(map[string]time.Time) // graceful degradation: preserve existing order
-		}
-		categoryNames, branchMap = sortView(categoryNames, branchMap, currentBranch, branchTimes)
-
-		if isatty.IsTerminal(os.Stdout.Fd()) {
-			checkedOut, err := ui.RunTUI(repoInfo.GitDir, categoryNames, branchMap, currentBranch, branchTags)
-			if err != nil {
-				return fmt.Errorf("TUI error: %w", err)
-			}
-			if checkedOut != "" {
-				ui.PrintSuccess(fmt.Sprintf("Switched to branch '%s'", checkedOut))
-			}
-			return nil
-		}
-
-		ui.PrintTree(categoryNames, branchMap, currentBranch, branchTags)
-		return nil
+		return runView(cmdTel, args)
 	},
+}
+
+func runView(tel telemetry.Recorder, args []string) (err error) {
+	defer func() { tel.Record("cmd_view", map[string]any{"success": err == nil}) }()
+
+	repoInfo, err := git.GetRepoInfo()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		return err
+	}
+
+	s, err := store.LoadOrCreate(repoInfo.GitDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		return err
+	}
+
+	allBranches, err := git.ListBranches(repoInfo.GitDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		return err
+	}
+
+	currentBranch, err := git.CurrentBranch(repoInfo.GitDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		return err
+	}
+
+	var filterCategory string
+	if len(args) > 0 {
+		filterCategory = args[0]
+		if !s.CategoryExists(filterCategory) {
+			ui.PrintError(fmt.Sprintf("category '%s' not found", filterCategory))
+			return fmt.Errorf("category not found: %s", filterCategory)
+		}
+	}
+
+	branchMap := make(map[string][]string)
+	var categoryNames []string
+
+	for _, cat := range s.Categories {
+		if filterCategory != "" && cat.Name != filterCategory {
+			continue
+		}
+
+		branches, err := s.BranchesInCategory(cat.Name, allBranches)
+		if err != nil {
+			ui.PrintError(err.Error())
+			return err
+		}
+
+		branchMap[cat.Name] = branches
+		categoryNames = append(categoryNames, cat.Name)
+	}
+
+	remoteBranches, err := git.ListRemoteBranches(repoInfo.GitDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		return err
+	}
+	remoteSet := make(map[string]bool, len(remoteBranches))
+	for _, b := range remoteBranches {
+		remoteSet[b] = true
+	}
+
+	branchTags := make(map[string]string)
+	for _, branch := range allBranches {
+		if !remoteSet[branch] {
+			branchTags[branch] = "[Local]"
+			continue
+		}
+		ahead, behind, err := git.SyncStatus(repoInfo.GitDir, branch)
+		if err != nil {
+			branchTags[branch] = "[Remote] ?"
+			continue
+		}
+		branchTags[branch] = formatSyncTag(ahead, behind)
+	}
+
+	branchTimes, err := git.BranchCommitTimes(repoInfo.GitDir)
+	if err != nil {
+		branchTimes = make(map[string]time.Time) // graceful degradation: preserve existing order
+	}
+	categoryNames, branchMap = sortView(categoryNames, branchMap, currentBranch, branchTimes)
+
+	if isatty.IsTerminal(os.Stdout.Fd()) {
+		checkedOut, tuiErr := ui.RunTUI(repoInfo.GitDir, categoryNames, branchMap, currentBranch, branchTags)
+		if tuiErr != nil {
+			return fmt.Errorf("TUI error: %w", tuiErr)
+		}
+		if checkedOut != "" {
+			tel.Record("branch_checkout", map[string]any{"source": "tui", "success": true})
+			ui.PrintSuccess(fmt.Sprintf("Switched to branch '%s'", checkedOut))
+		}
+		return nil
+	}
+
+	ui.PrintTree(categoryNames, branchMap, currentBranch, branchTags)
+	return nil
 }
 
 func formatSyncTag(ahead, behind int) string {

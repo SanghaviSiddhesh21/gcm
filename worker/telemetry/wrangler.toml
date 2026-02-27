@@ -1,0 +1,10 @@
+name = "gcm-telemetry"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# KV namespace for per-IP rate limiting.
+# After creating the namespace with `wrangler kv namespace create TELEMETRY_RL`,
+# replace the id below with the real namespace ID printed by that command.
+[[kv_namespaces]]
+binding = "KV"
+id = "1e8e47577fbd41c8a255834c2f4cba8b"

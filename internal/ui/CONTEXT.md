@@ -26,14 +26,16 @@ A separate Bubbletea program for the `gcm commit -g` flow. Three modes:
 - `modeReview` — displays generated message with y/e/r/q keybinds; shows large-diff warning when staged diff exceeds 500 changed lines
 - `modeManualInput` — inline text entry when AI is unavailable (not configured, rate limited, or generation failed after retries)
 
-Entry point: `RunCommitTUI(branch, diff, status, gen) (string, error)`. Returns `ErrCommitAborted` if the user quits without accepting.
+Entry point: `RunCommitTUI(_ string, diff, status, gen) (CommitResult, error)` — the first parameter (branch name) is accepted but unused. Returns `ErrCommitAborted` if the user quits without accepting. `CommitResult` carries the accepted message, a typed `CommitOutcome` (`accepted`, `edited`, `aborted`, `manual`), and a `Regenerations` count (user 'r' presses only — internal retry-on-failure is not counted).
 
 `countDiffLines(diff)` counts only `+`/`-` lines, excluding `+++`/`---` file headers and `@@` hunk headers. Used to trigger the large-diff warning.
 
 ## Exposed to `cmd`
 
 - `RunTUI` — Entry point for the interactive view. Returns the name of the checked-out branch (empty string if none).
-- `RunCommitTUI` — Entry point for the commit flow. Returns the accepted commit message.
+- `RunCommitTUI` — Entry point for the commit flow. Returns `CommitResult` and an error.
+- `CommitResult` — `{Message string, Outcome CommitOutcome, Regenerations int}`.
+- `CommitOutcome` — typed string: `OutcomeAccepted`, `OutcomeEdited`, `OutcomeAborted`, `OutcomeManual`.
 - `ErrCommitAborted` — returned when the user quits the commit TUI without accepting.
 - `PrintTree`, `PrintCategoryList`, `PrintSuccess`, `PrintWarning`, `PrintError` — Static output functions.
 

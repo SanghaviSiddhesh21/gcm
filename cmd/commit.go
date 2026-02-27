@@ -8,6 +8,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/siddhesh/gcm/internal/ai"
 	"github.com/siddhesh/gcm/internal/git"
+	"github.com/siddhesh/gcm/internal/telemetry"
 	"github.com/siddhesh/gcm/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -41,7 +42,7 @@ Note: -g cannot be combined with other flags.`,
 			return cmd.Help()
 		}
 
-		return runGenerateCommit()
+		return runGenerateCommit(cmdTel)
 	},
 }
 
@@ -58,7 +59,7 @@ func passthroughGitCommit(args []string) error {
 	return passthroughGit(globalGitFlags, append([]string{"commit"}, args...))
 }
 
-func runGenerateCommit() error {
+func runGenerateCommit(tel telemetry.Recorder) error {
 	if !isatty.IsTerminal(os.Stdin.Fd()) {
 		fmt.Fprintln(os.Stderr, "Error: gcm commit requires a terminal")
 		return fmt.Errorf("not a terminal")
@@ -86,16 +87,31 @@ func runGenerateCommit() error {
 		return err
 	}
 
-	message, err := ui.RunCommitTUI(repoInfo.GitDir, diff, status, ai.New())
+	result, err := ui.RunCommitTUI(repoInfo.GitDir, diff, status, ai.New())
 	if err != nil {
 		if errors.Is(err, ui.ErrCommitAborted) {
+			tel.Record("cmd_commit_ai", map[string]any{
+				"outcome":       string(ui.OutcomeAborted),
+				"regenerations": result.Regenerations,
+				"success":       true,
+			})
 			return nil // user quit — not an error condition
 		}
+		tel.Record("cmd_commit_ai", map[string]any{
+			"outcome": string(ui.OutcomeManual),
+			"success": false,
+		})
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		return err
 	}
 
-	if err := git.Commit(repoInfo.GitDir, message); err != nil {
+	tel.Record("cmd_commit_ai", map[string]any{
+		"outcome":       string(result.Outcome),
+		"regenerations": result.Regenerations,
+		"success":       true,
+	})
+
+	if err := git.Commit(repoInfo.GitDir, result.Message); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		return err
 	}

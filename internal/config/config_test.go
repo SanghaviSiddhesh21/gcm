@@ -3,14 +3,17 @@ package config
 import (
 	"errors"
 	"os"
+	"sync"
 	"testing"
 )
 
-// override configPath to use a temp dir for each test
+// withTempHome sets HOME to a fresh temp dir and resets the sync.Once cache.
 func withTempHome(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
+	configOnce = sync.Once{}
+	t.Cleanup(func() { configOnce = sync.Once{} })
 }
 
 // ── TestGetAPIKey ─────────────────────────────────────────────────────────────
@@ -38,6 +41,7 @@ func TestSetAPIKey(t *testing.T) {
 	if err := SetAPIKey("gsk_test123"); err != nil {
 		t.Fatalf("SetAPIKey() unexpected error: %v", err)
 	}
+	configOnce = sync.Once{}
 	val, err := GetAPIKey()
 	if err != nil {
 		t.Fatalf("GetAPIKey() after set: unexpected error: %v", err)
@@ -50,9 +54,11 @@ func TestSetAPIKey(t *testing.T) {
 func TestSetAPIKey_Overwrite(t *testing.T) {
 	withTempHome(t)
 	_ = SetAPIKey("first")
+	configOnce = sync.Once{}
 	if err := SetAPIKey("second"); err != nil {
 		t.Fatalf("SetAPIKey() overwrite unexpected error: %v", err)
 	}
+	configOnce = sync.Once{}
 	val, _ := GetAPIKey()
 	if val != "second" {
 		t.Errorf("GetAPIKey() = %q, want %q", val, "second")
@@ -64,9 +70,11 @@ func TestSetAPIKey_Overwrite(t *testing.T) {
 func TestUnsetAPIKey(t *testing.T) {
 	withTempHome(t)
 	_ = SetAPIKey("gsk_test123")
+	configOnce = sync.Once{}
 	if err := UnsetAPIKey(); err != nil {
 		t.Fatalf("UnsetAPIKey() unexpected error: %v", err)
 	}
+	configOnce = sync.Once{}
 	_, err := GetAPIKey()
 	if !errors.Is(err, ErrNotSet) {
 		t.Errorf("GetAPIKey() after unset: error = %v, want ErrNotSet", err)
@@ -98,5 +106,83 @@ func TestFilePermissions(t *testing.T) {
 	}
 	if perm := info.Mode().Perm(); perm != 0600 {
 		t.Errorf("file permissions = %o, want 0600", perm)
+	}
+}
+
+// ── TestGetOrCreateInstallID ──────────────────────────────────────────────────
+
+func TestGetOrCreateInstallID_DisabledByCI(t *testing.T) {
+	withTempHome(t)
+	t.Setenv("CI", "1")
+	id, err := GetOrCreateInstallID()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if id != "" {
+		t.Errorf("GetOrCreateInstallID() = %q, want empty string when CI set", id)
+	}
+}
+
+func TestGetOrCreateInstallID_GeneratesAndPersists(t *testing.T) {
+	withTempHome(t)
+	t.Setenv("CI", "")
+	t.Setenv("GITHUB_ACTIONS", "")
+	id1, err := GetOrCreateInstallID()
+	if err != nil {
+		t.Fatalf("unexpected error on first call: %v", err)
+	}
+	if id1 == "" {
+		t.Fatal("GetOrCreateInstallID() returned empty ID on first call")
+	}
+	// Reset cache — second call must return same ID from disk.
+	configOnce = sync.Once{}
+	id2, err := GetOrCreateInstallID()
+	if err != nil {
+		t.Fatalf("unexpected error on second call: %v", err)
+	}
+	if id1 != id2 {
+		t.Errorf("GetOrCreateInstallID() not stable: %q != %q", id1, id2)
+	}
+}
+
+func TestGetOrCreateInstallID_DoesNotAffectAPIKey(t *testing.T) {
+	withTempHome(t)
+	t.Setenv("CI", "")
+	t.Setenv("GITHUB_ACTIONS", "")
+	_ = SetAPIKey("gsk_test123")
+	configOnce = sync.Once{}
+
+	id, err := GetOrCreateInstallID()
+	if err != nil {
+		t.Fatalf("GetOrCreateInstallID() unexpected error: %v", err)
+	}
+	if id == "" {
+		t.Fatal("GetOrCreateInstallID() returned empty ID")
+	}
+
+	configOnce = sync.Once{}
+	key, err := GetAPIKey()
+	if err != nil {
+		t.Fatalf("GetAPIKey() after GetOrCreateInstallID: %v", err)
+	}
+	if key != "gsk_test123" {
+		t.Errorf("GetAPIKey() = %q, want %q after install ID created", key, "gsk_test123")
+	}
+}
+
+// ── TestSave_AtomicWrite ──────────────────────────────────────────────────────
+
+func TestSave_AtomicWrite(t *testing.T) {
+	withTempHome(t)
+	_ = SetAPIKey("gsk_test")
+
+	path, err := configPath()
+	if err != nil {
+		t.Fatalf("configPath() error: %v", err)
+	}
+	// After a successful save, the .tmp file must not exist.
+	_, statErr := os.Stat(path + ".tmp")
+	if !errors.Is(statErr, os.ErrNotExist) {
+		t.Error("save() left a .tmp file after successful write")
 	}
 }

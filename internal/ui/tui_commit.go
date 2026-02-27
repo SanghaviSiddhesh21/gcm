@@ -17,6 +17,23 @@ import (
 
 var ErrCommitAborted = errors.New("commit aborted")
 
+// CommitOutcome is the typed result of a commit-g session.
+type CommitOutcome string
+
+const (
+	OutcomeAccepted CommitOutcome = "accepted"
+	OutcomeEdited   CommitOutcome = "edited"
+	OutcomeAborted  CommitOutcome = "aborted"
+	OutcomeManual   CommitOutcome = "manual"
+)
+
+// CommitResult carries the outcome of a RunCommitTUI session.
+type CommitResult struct {
+	Message       string
+	Outcome       CommitOutcome
+	Regenerations int // count of user 'r' presses only; internal retries-on-failure excluded
+}
+
 type commitMode int
 
 const (
@@ -82,8 +99,11 @@ type commitModel struct {
 
 	manualErrMsg string
 
-	result  string
-	aborted bool
+	result         string
+	aborted        bool
+	regenerations  int  // user 'r' presses only (not internal retry-on-failure)
+	usedEditor     bool // set when editorDoneMsg arrives with a non-empty message
+	exitedManually bool // set when modeManualInput produces a result via Enter
 
 	width  int
 	height int
@@ -159,6 +179,7 @@ func (m commitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.message = msg.message
+		m.usedEditor = true
 		m.mode = modeReview
 		return m, nil
 
@@ -194,6 +215,7 @@ func (m commitModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.generationID++
 			m.retryCount = 0
 			m.mode = modeGenerating
+			m.regenerations++ // user-initiated regeneration only (not internal retry-on-failure)
 			return m, tea.Batch(
 				doGenerate(m.gen, m.diff, m.generationID),
 				spinnerTick(),
@@ -233,6 +255,7 @@ func (m commitModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.result = trimmed
+			m.exitedManually = true
 			return m, tea.Quit
 
 		case "backspace":
@@ -383,7 +406,7 @@ func countDiffLines(diff string) int {
 	return count
 }
 
-func RunCommitTUI(_ string, diff string, status git.WorktreeStatus, gen ai.Generator) (string, error) {
+func RunCommitTUI(_ string, diff string, status git.WorktreeStatus, gen ai.Generator) (CommitResult, error) {
 	m := commitModel{
 		diff:      diff,
 		diffLines: countDiffLines(diff),
@@ -395,15 +418,29 @@ func RunCommitTUI(_ string, diff string, status git.WorktreeStatus, gen ai.Gener
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	finalModel, err := p.Run()
 	if err != nil {
-		return "", err
+		return CommitResult{Outcome: OutcomeAborted}, err
 	}
 
 	fm, ok := finalModel.(commitModel)
 	if !ok {
-		return "", ErrCommitAborted
+		return CommitResult{Outcome: OutcomeAborted}, ErrCommitAborted
 	}
 	if fm.aborted || fm.result == "" {
-		return "", ErrCommitAborted
+		return CommitResult{Outcome: OutcomeAborted, Regenerations: fm.regenerations}, ErrCommitAborted
 	}
-	return fm.result, nil
+
+	var outcome CommitOutcome
+	switch {
+	case fm.usedEditor:
+		outcome = OutcomeEdited
+	case fm.exitedManually:
+		outcome = OutcomeManual
+	default:
+		outcome = OutcomeAccepted
+	}
+	return CommitResult{
+		Message:       fm.result,
+		Outcome:       outcome,
+		Regenerations: fm.regenerations,
+	}, nil
 }
