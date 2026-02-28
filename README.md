@@ -20,6 +20,12 @@ scoop bucket add siddhesh https://github.com/SanghaviSiddhesh21/scoop-bucket
 scoop install gcm
 ```
 
+> **PowerShell note:** `gcm` is a built-in PowerShell alias for `Get-Command`. Add this line to your PowerShell profile (`notepad $PROFILE`) to remove the conflict permanently:
+> ```powershell
+> Remove-Item alias:gcm -Force -ErrorAction SilentlyContinue
+> ```
+> Alternatively, use **Command Prompt** (`cmd.exe`) where `gcm` works without any changes.
+
 ### Download Binary
 
 Download the latest binary for your platform from [GitHub Releases](https://github.com/SanghaviSiddhesh21/gcm/releases).
@@ -90,6 +96,26 @@ gcm commit -g
 ```
 
 The `●` marker indicates your currently checked out branch.
+
+---
+
+## git passthrough
+
+`gcm` is a drop-in replacement for `git`. Any command not natively handled by gcm is forwarded verbatim to git — flags, arguments, interactive prompts, pagers, and editors all work as expected.
+
+```bash
+gcm status
+gcm log --oneline
+gcm push origin main
+gcm rebase -i HEAD~3
+gcm stash pop
+```
+
+You can alias `git` to `gcm` in your shell and everything will continue to work:
+
+```bash
+alias git=gcm
+```
 
 ---
 
